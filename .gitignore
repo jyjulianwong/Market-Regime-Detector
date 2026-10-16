@@ -1,0 +1,34 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Env / secrets
+.env
+
+# Lambda packaging artifacts (scripts/package_lambda.sh)
+/build/
+
+# Terraform placeholder API Lambda zip (terraform/main.tf's archive_file)
+terraform/.placeholder-*.zip
+
+# Terraform
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfplan
+
+# OS
+.DS_Store
+
+# Project
+AGENTS.md
+CLAUDE.md
+TODO.md
+reports/

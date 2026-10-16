@@ -1,0 +1,236 @@
+name: Deploy Infrastructure & Lambda
+
+# on:
+#   push:
+#     branches: [main]
+#     paths:
+#       - ".github/**"
+#       - "terraform/**"
+#       - "docker/**"
+#       - "scripts/**"
+#       - "src/**"
+#       - "pyproject.toml"
+#       - "uv.lock"
+#   pull_request:
+#     branches: [main]
+#     paths:
+#       - ".github/**"
+#       - "terraform/**"
+#       - "docker/**"
+#       - "scripts/**"
+#       - "src/**"
+#       - "pyproject.toml"
+#       - "uv.lock"
+
+env:
+  AWS_REGION: eu-west-2
+  TF_VERSION: "1.9.0"
+
+jobs:
+  terraform-plan:
+    name: Terraform Plan
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    permissions:
+      contents: read
+      pull-requests: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id:     ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region:            ${{ env.AWS_REGION }}
+
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+
+      - name: Terraform Init
+        working-directory: terraform
+        env:
+          TF_BACKEND_BUCKET: ${{ secrets.AWS_ACCOUNT_ID }}-jyjulianwong-mrd-terraform-state
+          TF_BACKEND_TABLE:  jyjulianwong-mrd-terraform-lock
+        run: |
+          terraform init \
+            -backend-config="bucket=$TF_BACKEND_BUCKET" \
+            -backend-config="dynamodb_table=$TF_BACKEND_TABLE"
+
+      - name: Terraform Validate
+        working-directory: terraform
+        run: terraform validate
+
+      - name: Terraform Plan
+        working-directory: terraform
+        run: |
+          terraform plan \
+            -var="aws_account_id=${{ secrets.AWS_ACCOUNT_ID }}" \
+            -var="fred_api_key=${{ secrets.FRED_API_KEY }}" \
+            -var="alpha_vantage_api_key=${{ secrets.ALPHA_VANTAGE_API_KEY }}" \
+            -var="cors_allowed_origins=${{ vars.CORS_ALLOWED_ORIGINS || '' }}" \
+            -var="staleness_max_age_hours=${{ vars.STALENESS_MAX_AGE_HOURS || '36' }}" \
+            -var="alert_email=${{ vars.ALERT_EMAIL || 'julianwong2000@gmail.com' }}" \
+            -var="batch_schedule_expression=${{ vars.BATCH_SCHEDULE_EXPRESSION || 'cron(30 6 ? * MON-FRI *)' }}" \
+            -no-color \
+            -out=tfplan
+        continue-on-error: true
+
+      - name: Post plan to PR
+        uses: actions/github-script@v7
+        if: always()
+        with:
+          script: |
+            const planOutput = '${{ steps.terraform-plan.outputs.stdout }}'.slice(0, 60000);
+            const body = `### Terraform Plan\n\`\`\`\n${planOutput}\n\`\`\``;
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body,
+            });
+
+  version_bump:
+    name: Calendar Version Bump
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    permissions:
+      contents: write
+    outputs:
+      version: ${{ steps.bump.outputs.version }}
+      tag:     ${{ steps.bump.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Bump calver and tag
+        id: bump
+        run: python3 scripts/bump_calver.py
+
+      - name: Push commit and tag
+        run: git push origin HEAD:main --tags
+
+  deploy:
+    name: Terraform Apply + Lambda Deploy
+    needs: [version_bump]
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.version_bump.outputs.tag }}
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id:     ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region:            ${{ env.AWS_REGION }}
+
+      # -----------------------------------------------------------------------
+      # Terraform apply
+      # -----------------------------------------------------------------------
+
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+          terraform_wrapper: false
+
+      - name: Terraform Init
+        working-directory: terraform
+        env:
+          TF_BACKEND_BUCKET: ${{ secrets.AWS_ACCOUNT_ID }}-jyjulianwong-mrd-terraform-state
+          TF_BACKEND_TABLE:  jyjulianwong-mrd-terraform-lock
+        run: |
+          terraform init \
+            -backend-config="bucket=$TF_BACKEND_BUCKET" \
+            -backend-config="dynamodb_table=$TF_BACKEND_TABLE"
+
+      - name: Terraform Apply
+        working-directory: terraform
+        run: |
+          terraform apply \
+            -var="aws_account_id=${{ secrets.AWS_ACCOUNT_ID }}" \
+            -var="fred_api_key=${{ secrets.FRED_API_KEY }}" \
+            -var="alpha_vantage_api_key=${{ secrets.ALPHA_VANTAGE_API_KEY }}" \
+            -var="cors_allowed_origins=${{ vars.CORS_ALLOWED_ORIGINS || '' }}" \
+            -var="staleness_max_age_hours=${{ vars.STALENESS_MAX_AGE_HOURS || '36' }}" \
+            -var="alert_email=${{ vars.ALERT_EMAIL || 'julianwong2000@gmail.com' }}" \
+            -var="batch_schedule_expression=${{ vars.BATCH_SCHEDULE_EXPRESSION || 'cron(30 6 ? * MON-FRI *)' }}" \
+            -auto-approve \
+            -no-color
+
+      - name: Read Terraform outputs
+        id: tf_outputs
+        working-directory: terraform
+        run: |
+          echo "ecr_url=$(terraform output -raw ecr_repository_url)" >> "$GITHUB_OUTPUT"
+          echo "batch_lambda_name=$(terraform output -raw batch_lambda_function_name)" >> "$GITHUB_OUTPUT"
+          echo "api_lambda_name=$(terraform output -raw api_lambda_function_name)" >> "$GITHUB_OUTPUT"
+
+      # -----------------------------------------------------------------------
+      # Build & push the batch Lambda container image
+      # -----------------------------------------------------------------------
+
+      - name: Log in to Amazon ECR
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build, tag, and push batch Lambda image
+        env:
+          ECR_URL:   ${{ steps.tf_outputs.outputs.ecr_url }}
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          docker buildx build \
+            --platform linux/amd64 \
+            --provenance=false \
+            --push \
+            -f docker/batch-lambda.Dockerfile \
+            -t "$ECR_URL:$IMAGE_TAG" \
+            -t "$ECR_URL:latest" \
+            .
+
+      - name: Update batch Lambda function code
+        env:
+          ECR_URL:         ${{ steps.tf_outputs.outputs.ecr_url }}
+          BATCH_LAMBDA:    ${{ steps.tf_outputs.outputs.batch_lambda_name }}
+          IMAGE_TAG:       ${{ github.sha }}
+        run: |
+          aws lambda update-function-code \
+            --function-name "$BATCH_LAMBDA" \
+            --image-uri "$ECR_URL:$IMAGE_TAG" \
+            --region "$AWS_REGION"
+
+      # -----------------------------------------------------------------------
+      # Build & deploy the real API Lambda zip (with dependencies)
+      # -----------------------------------------------------------------------
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install uv
+        run: pip install uv
+
+      - name: Package API Lambda
+        run: ./scripts/package_lambda.sh
+
+      - name: Update API Lambda function code
+        env:
+          API_LAMBDA: ${{ steps.tf_outputs.outputs.api_lambda_name }}
+        run: |
+          aws lambda update-function-code \
+            --function-name "$API_LAMBDA" \
+            --zip-file fileb://build/lambda.zip \
+            --region "$AWS_REGION"

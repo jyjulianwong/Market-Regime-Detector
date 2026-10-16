@@ -1,0 +1,99 @@
+[project]
+name = "market-regime-detector"
+version = "0.1.0"
+description = "Nowcasts Bridgewater All Weather macro quadrants from a daily batch HMM pipeline, served by a read-only API."
+requires-python = ">=3.12"
+dependencies = [
+    "boto3>=1.35,<1.36",
+    "pydantic-settings>=2.6,<3.0",
+    "pydantic>=2.9,<3.0",
+]
+
+[project.optional-dependencies]
+# Installed by the API Lambda / local uvicorn dev server. Deliberately excludes
+# pandas/numpy/hmmlearn so the read-only API has no inference-capable dependencies.
+api = [
+    "fastapi>=0.115,<0.116",
+    "mangum>=0.19,<0.20",
+    "uvicorn[standard]>=0.32,<0.33",
+]
+# Installed by the batch Lambda (ingestion + feature building + NumPy forward filter
+# inference). Excludes hmmlearn, which is training-only.
+batch = [
+    "fredapi>=0.5,<0.6",
+    "numpy>=2.1,<3.0",
+    "pandas>=2.2,<3.0",
+    "pyarrow>=17.0,<18.0",
+    "requests>=2.32,<3.0",
+    "yfinance>=0.2,<0.3",
+]
+# Local-only: training scripts fit the HMMs and evaluate them. Never shipped to Lambda.
+train = [
+    "hmmlearn>=0.3,<0.4",
+    "matplotlib>=3.9,<4.0",
+    "scikit-learn>=1.5,<2.0",
+    "tabulate>=0.9,<0.10",
+]
+
+[dependency-groups]
+dev = [
+    "boto3-stubs[dynamodb,lambda,s3]>=1.35,<1.36",
+    "httpx>=0.27,<0.28",
+    "moto[dynamodb,s3]>=5.0,<6.0",
+    "mypy>=1.13,<2.0",
+    "pandas-stubs>=2.2,<3.0",
+    "pre-commit>=4.0,<5.0",
+    "pytest-cov>=6.0,<7.0",
+    "pytest>=8.3,<9.0",
+    "ruff>=0.15,<1.0",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/market_regime_detector"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "W", "F", "I", "B", "UP", "C4", "SIM"]
+ignore = ["E501"]
+
+[tool.ruff.lint.per-file-ignores]
+"**/__init__.py" = ["F401"]
+
+[tool.ruff.lint.flake8-bugbear]
+# FastAPI's dependency-injection pattern (`= Query(...)`, `= Depends(...)`) is a
+# function call in an argument default by design — not the mutable-default bug
+# B008 exists to catch.
+extend-immutable-calls = ["fastapi.Query", "fastapi.Depends", "fastapi.Path"]
+
+[tool.mypy]
+strict = true
+files = ["src", "tests", "scripts"]
+
+[[tool.mypy.overrides]]
+module = ["fredapi.*", "yfinance.*", "hmmlearn.*", "mangum.*", "sklearn.*"]
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "--cov=market_regime_detector --cov-report=term-missing"
+filterwarnings = [
+    # pandas' own `.resample(...)` internals trip this on the pandas 2.3.x / NumPy
+    # 2.x combination this project pins — not triggered by any of our own code
+    # (which already avoids the bare `Timedelta(days=...)` form that causes it, see
+    # common/pit.py), so there's nothing on our side to fix. Revisit once pandas
+    # ships a fix upstream.
+    "ignore:The 'generic' unit for NumPy timedelta is deprecated:DeprecationWarning",
+    # hmmlearn's own internals (`hmmlearn/utils.py`) trip this on the NumPy 2.5 pin —
+    # not triggered by any of our own code, nothing on our side to fix.
+    "ignore:Setting the shape on a NumPy array has been deprecated:DeprecationWarning",
+]
+
+[tool.coverage.run]
+source = ["src/market_regime_detector"]
