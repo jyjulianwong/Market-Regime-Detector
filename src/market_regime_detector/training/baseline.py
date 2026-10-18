@@ -11,7 +11,7 @@ def baseline_signal(axis_df: pd.DataFrame, feature_defs: list[FeatureDefinition]
     the composite here is a sign-weighted average of those already-computed feature
     values — the direct reading of "change in a composite" available from this
     project's inputs, rather than inventing a second, unspecified level-based
-    composite to re-differentiate. Documented as a judgment call in CLAUDE.md.
+    composite to re-differentiate — a deliberate judgment call.
 
     Returns `"UP"`/`"DOWN"` per decision date; a composite of exactly 0 rounds to
     `"UP"` (a rare tie, not worth a third label).

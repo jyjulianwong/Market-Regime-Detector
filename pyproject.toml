@@ -10,7 +10,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-# Installed by the API Lambda / local uvicorn dev server. Deliberately excludes
+# Installed by the server Lambda / local uvicorn dev server. Deliberately excludes
 # pandas/numpy/hmmlearn so the read-only API has no inference-capable dependencies.
 api = [
     "fastapi>=0.115,<0.116",

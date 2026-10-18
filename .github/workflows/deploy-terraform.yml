@@ -1,26 +1,26 @@
 name: Deploy Infrastructure & Lambda
 
-# on:
-#   push:
-#     branches: [main]
-#     paths:
-#       - ".github/**"
-#       - "terraform/**"
-#       - "docker/**"
-#       - "scripts/**"
-#       - "src/**"
-#       - "pyproject.toml"
-#       - "uv.lock"
-#   pull_request:
-#     branches: [main]
-#     paths:
-#       - ".github/**"
-#       - "terraform/**"
-#       - "docker/**"
-#       - "scripts/**"
-#       - "src/**"
-#       - "pyproject.toml"
-#       - "uv.lock"
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/**"
+      - "terraform/**"
+      - "docker/**"
+      - "scripts/**"
+      - "src/**"
+      - "pyproject.toml"
+      - "uv.lock"
+  pull_request:
+    branches: [main]
+    paths:
+      - ".github/**"
+      - "terraform/**"
+      - "docker/**"
+      - "scripts/**"
+      - "src/**"
+      - "pyproject.toml"
+      - "uv.lock"
 
 env:
   AWS_REGION: eu-west-2
@@ -65,6 +65,7 @@ jobs:
         run: terraform validate
 
       - name: Terraform Plan
+        id: terraform-plan
         working-directory: terraform
         run: |
           terraform plan \
@@ -74,7 +75,8 @@ jobs:
             -var="cors_allowed_origins=${{ vars.CORS_ALLOWED_ORIGINS || '' }}" \
             -var="staleness_max_age_hours=${{ vars.STALENESS_MAX_AGE_HOURS || '36' }}" \
             -var="alert_email=${{ vars.ALERT_EMAIL || 'julianwong2000@gmail.com' }}" \
-            -var="batch_schedule_expression=${{ vars.BATCH_SCHEDULE_EXPRESSION || 'cron(30 6 ? * MON-FRI *)' }}" \
+            -var="batch_predict_schedule_expression=${{ vars.BATCH_PREDICT_SCHEDULE_EXPRESSION || 'cron(30 6 ? * MON-FRI *)' }}" \
+            -var="batch_ingest_schedule_expression=${{ vars.BATCH_INGEST_SCHEDULE_EXPRESSION || 'cron(0 5 ? * SUN *)' }}" \
             -no-color \
             -out=tfplan
         continue-on-error: true
@@ -167,7 +169,8 @@ jobs:
             -var="cors_allowed_origins=${{ vars.CORS_ALLOWED_ORIGINS || '' }}" \
             -var="staleness_max_age_hours=${{ vars.STALENESS_MAX_AGE_HOURS || '36' }}" \
             -var="alert_email=${{ vars.ALERT_EMAIL || 'julianwong2000@gmail.com' }}" \
-            -var="batch_schedule_expression=${{ vars.BATCH_SCHEDULE_EXPRESSION || 'cron(30 6 ? * MON-FRI *)' }}" \
+            -var="batch_predict_schedule_expression=${{ vars.BATCH_PREDICT_SCHEDULE_EXPRESSION || 'cron(30 6 ? * MON-FRI *)' }}" \
+            -var="batch_ingest_schedule_expression=${{ vars.BATCH_INGEST_SCHEDULE_EXPRESSION || 'cron(0 5 ? * SUN *)' }}" \
             -auto-approve \
             -no-color
 
@@ -177,7 +180,7 @@ jobs:
         run: |
           echo "ecr_url=$(terraform output -raw ecr_repository_url)" >> "$GITHUB_OUTPUT"
           echo "batch_lambda_name=$(terraform output -raw batch_lambda_function_name)" >> "$GITHUB_OUTPUT"
-          echo "api_lambda_name=$(terraform output -raw api_lambda_function_name)" >> "$GITHUB_OUTPUT"
+          echo "server_lambda_name=$(terraform output -raw server_lambda_function_name)" >> "$GITHUB_OUTPUT"
 
       # -----------------------------------------------------------------------
       # Build & push the batch Lambda container image
@@ -212,7 +215,7 @@ jobs:
             --region "$AWS_REGION"
 
       # -----------------------------------------------------------------------
-      # Build & deploy the real API Lambda zip (with dependencies)
+      # Build & deploy the real server Lambda zip (with dependencies)
       # -----------------------------------------------------------------------
 
       - name: Set up Python
@@ -223,14 +226,14 @@ jobs:
       - name: Install uv
         run: pip install uv
 
-      - name: Package API Lambda
+      - name: Package server Lambda
         run: ./scripts/package_lambda.sh
 
-      - name: Update API Lambda function code
+      - name: Update server Lambda function code
         env:
-          API_LAMBDA: ${{ steps.tf_outputs.outputs.api_lambda_name }}
+          SERVER_LAMBDA: ${{ steps.tf_outputs.outputs.server_lambda_name }}
         run: |
           aws lambda update-function-code \
-            --function-name "$API_LAMBDA" \
+            --function-name "$SERVER_LAMBDA" \
             --zip-file fileb://build/lambda.zip \
             --region "$AWS_REGION"

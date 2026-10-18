@@ -5,7 +5,7 @@ from typing import Any
 from market_regime_detector.common.dynamodb import get_dynamodb_client
 from market_regime_detector.common.logging import configure_logging
 from market_regime_detector.common.s3 import get_s3_client
-from market_regime_detector.common.settings import get_settings
+from market_regime_detector.common.settings import Settings, get_settings
 from market_regime_detector.ingestion.ingest import ingest_incremental
 from market_regime_detector.ingestion.series_catalog import FIRST_PASS_SERIES
 from market_regime_detector.prediction.outputs import write_prediction_outputs
@@ -19,35 +19,37 @@ def _parse_date(event: dict[str, Any], key: str) -> date | None:
     return date.fromisoformat(value) if value is not None else None
 
 
-def _run_incremental_ingestion(bucket: str, end: date | None) -> None:
-    """Runs incremental ingestion for every first-pass series before prediction
-    (brief section 3.3: "It runs incremental ingestion by calling the public
-    ingestion function, then prediction"). Each series' failure is caught and
-    logged, not raised — one bad provider call must not take down the whole daily
-    run; prediction proceeds with whatever's already in the lake.
+def _handle_ingest(event: dict[str, Any], settings: Settings) -> dict[str, object]:
+    """Weekly-scheduled action: incremental ingestion for every first-pass series.
+    Each series' failure is caught and logged, not raised — one bad provider call
+    must not take down the whole run.
     """
+    end = _parse_date(event, "end")
+    failed: list[str] = []
     for spec in FIRST_PASS_SERIES:
         try:
-            ingest_incremental(spec.series_id, spec.source, bucket, end=end)
+            ingest_incremental(spec.series_id, spec.source, settings.s3_bucket_name, end=end)
         except Exception:
             logger.exception("incremental ingestion failed for %r", spec.series_id)
+            failed.append(spec.series_id)
+
+    result = {
+        "series_ingested": len(FIRST_PASS_SERIES) - len(failed),
+        "series_failed": failed,
+    }
+    logger.info("incremental ingestion complete: %s", result)
+    return result
 
 
-def handler(event: dict[str, Any], _context: object = None) -> dict[str, object]:
-    """Batch Lambda entrypoint (brief section 3.3). An empty event — the scheduler's
-    default once EventBridge exists (Phase 8) — means: production model, lake
-    source, latest data.
+def _handle_predict(event: dict[str, Any], settings: Settings) -> dict[str, object]:
+    """Daily-scheduled action: nowcast off whatever's already in the lake — never
+    triggers ingestion itself (see the `ingest` action above for that).
     """
-    settings = get_settings()
-    configure_logging(settings.log_level)
-
     model_id = event.get("model_id")
     source = event.get("source", "lake")
     start = _parse_date(event, "start")
     end = _parse_date(event, "end")
     asof = _parse_date(event, "asof")
-
-    _run_incremental_ingestion(settings.s3_bucket_name, end)
 
     s3 = get_s3_client()
     dynamodb = get_dynamodb_client()
@@ -77,3 +79,32 @@ def handler(event: dict[str, Any], _context: object = None) -> dict[str, object]
         else None,
         "is_stale": result.is_stale,
     }
+
+
+_ACTIONS = {
+    "ingest": _handle_ingest,
+    "predict": _handle_predict,
+}
+
+
+def handler(event: dict[str, Any], _context: object = None) -> dict[str, object]:
+    """Batch Lambda entrypoint, shared by two separately-scheduled EventBridge
+    Rules (see terraform/main.tf): a weekly `{"action": "ingest"}` run and a daily
+    `{"action": "predict"}` run that nowcasts off whatever ingestion already
+    landed in the lake. Dispatches on an explicit `action` key rather than always
+    doing both, as a single combined run (brief section 3.3's original design)
+    did — ingestion and prediction are now independent concerns on independent
+    schedules. An empty event (e.g. a manual console test invoke) defaults to
+    `"predict"`: production model, lake source, latest data — but never silently
+    ingests; that must be requested explicitly.
+    """
+    settings = get_settings()
+    configure_logging(settings.log_level)
+
+    action = event.get("action", "predict")
+    try:
+        action_handler = _ACTIONS[action]
+    except KeyError:
+        raise ValueError(f"unknown action {action!r}, expected one of {sorted(_ACTIONS)}") from None
+
+    return action_handler(event, settings)

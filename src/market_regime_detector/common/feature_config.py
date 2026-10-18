@@ -173,11 +173,11 @@ def used_series_ids(feature_config: FeatureConfig) -> list[str]:
 
 
 # Brief section 2.4's first-pass feature set. Exact transform shapes (periods,
-# pct-change vs. diff, annualization) and signs are my judgment calls where the
-# brief names a series/feature but not every numeric parameter — see CLAUDE.md for
-# the full table and reasoning, including the two deliberate exceptions: T10Y2Y is
-# fed as a raw level (transform "identity") rather than a rate of change, and
-# DFII10's sign is a debatable real-yield/inflation call.
+# pct-change vs. diff, annualization) and signs are judgment calls where the
+# brief names a series/feature but not every numeric parameter, including two
+# deliberate exceptions: T10Y2Y is fed as a raw level (transform "identity")
+# rather than a rate of change, and DFII10's sign is a debatable
+# real-yield/inflation call.
 FEATURE_CONFIG_V1 = FeatureConfig(
     version="v1",
     features=(

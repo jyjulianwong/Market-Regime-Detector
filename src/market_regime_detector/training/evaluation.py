@@ -23,7 +23,7 @@ def walk_forward_evaluate(
     and aggregates them into one DataFrame (`decision_date`, `p_up`, `label`,
     `fold_id`).
 
-    **Simplification, flagged in CLAUDE.md**: each refit segment is forward-filtered
+    **Simplification**: each refit segment is forward-filtered
     independently from its own start using that fit's own `start_prob`, rather than
     one continuous filter carried across refit boundaries — avoids reconciling whose
     `alpha` carries forward across a parameter change. Still fully causal: a

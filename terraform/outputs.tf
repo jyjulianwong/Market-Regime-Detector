@@ -18,14 +18,14 @@ output "batch_lambda_function_name" {
   value       = aws_lambda_function.batch.function_name
 }
 
-output "api_lambda_function_name" {
-  description = "API Lambda function name — for CI/CD update-function-code"
-  value       = aws_lambda_function.api.function_name
+output "server_lambda_function_name" {
+  description = "Server Lambda function name — for CI/CD update-function-code"
+  value       = aws_lambda_function.server.function_name
 }
 
-output "api_function_url" {
+output "server_function_url" {
   description = "Public Lambda Function URL for the read-only API (brief section 3.5's ASSUMPTION, resolved)"
-  value       = aws_lambda_function_url.api.function_url
+  value       = aws_lambda_function_url.server.function_url
 }
 
 output "batch_dlq_url" {

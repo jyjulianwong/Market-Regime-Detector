@@ -62,7 +62,7 @@ def _fetch_raw_series(
     provider** (`feature.source`), not a single caller-supplied provider name; the
     feature config spans three different providers (brief section 3.1), so one name
     can't serve every series. This resolves the brief's "a provider name" ASSUMPTION
-    for `source` — see CLAUDE.md.
+    for `source`.
     """
     series_ids = used_series_ids(feature_config)
 
@@ -96,7 +96,7 @@ def _build_daily_axis_df(
     evaluation_dates: pd.DatetimeIndex,
 ) -> pd.DataFrame:
     """Deliberately not a shared call into `training/dataset.py` — this project's
-    one hard dependency rule (brief section 3.5, see CLAUDE.md) is that nothing
+    one hard dependency rule (brief section 3.5) is that nothing
     under `prediction/` imports from `training/`, because `training/trainer.py`
     imports `hmmlearn` and the batch Lambda's dependency group excludes it. This
     duplicates ~15 lines of axis-matrix assembly rather than risk that boundary.

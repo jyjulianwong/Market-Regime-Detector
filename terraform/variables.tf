@@ -56,10 +56,16 @@ variable "staleness_max_age_hours" {
 # Schedule and alerting
 # ---------------------------------------------------------------------------
 
-variable "batch_schedule_expression" {
-  description = "EventBridge Rule cron expression for the daily batch Lambda trigger — 06:30 UTC, weekdays (after the prior US session's data is available)"
+variable "batch_predict_schedule_expression" {
+  description = "EventBridge Rule cron expression for the daily prediction run (batch-lambda {\"action\": \"predict\"}) — 06:30 UTC, weekdays (after the prior US session's data is available)"
   type        = string
   default     = "cron(30 6 ? * MON-FRI *)"
+}
+
+variable "batch_ingest_schedule_expression" {
+  description = "EventBridge Rule cron expression for the weekly ingestion run (batch-lambda {\"action\": \"ingest\"}) — 05:00 UTC Sundays, ahead of the week's first prediction run"
+  type        = string
+  default     = "cron(0 5 ? * SUN *)"
 }
 
 variable "alert_email" {
@@ -72,7 +78,7 @@ variable "alert_email" {
 # Lambda sizing — judgment calls (brief doesn't specify): the batch job does a
 # handful of provider fetches plus a NumPy forward filter over small arrays,
 # nothing like Investment-News-Analysis-AI's LLM-calling Lambda (900s/1024MB);
-# the API Lambda is read-only with no inference, same ballpark as
+# the server Lambda is read-only with no inference, same ballpark as
 # Obsidian-Server's auth Lambda.
 # ---------------------------------------------------------------------------
 
@@ -87,12 +93,12 @@ variable "batch_lambda_memory_mb" {
   default = 512
 }
 
-variable "api_lambda_timeout_seconds" {
+variable "server_lambda_timeout_seconds" {
   type    = number
   default = 10
 }
 
-variable "api_lambda_memory_mb" {
+variable "server_lambda_memory_mb" {
   type    = number
   default = 256
 }

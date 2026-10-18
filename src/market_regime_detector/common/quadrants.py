@@ -11,7 +11,7 @@ def quadrant_probabilities(p_growth_up: float, p_inflation_up: float) -> dict[st
     P(axis_up) × P(other_axis_up_or_down)`. Shared by `training/report.py` (across a
     whole walk-forward timeline) and `prediction/predict.py` (a single day), so it
     lives in `common/` rather than being duplicated or imported across the
-    `training/` → `hmmlearn` boundary (see CLAUDE.md).
+    `training/` → `hmmlearn` boundary.
     """
     return {
         "GROWTH_UP_INFLATION_DOWN": p_growth_up * (1 - p_inflation_up),

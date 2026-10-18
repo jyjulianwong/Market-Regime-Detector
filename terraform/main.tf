@@ -18,7 +18,7 @@ provider "aws" {
 }
 
 locals {
-  global_prefix = "${var.aws_account_id}-${var.project}" # S3 bucket, ECR (globally scoped)
+  global_prefix = "${var.aws_account_id}-${var.project}" # S3 bucket (globally scoped)
   scoped_prefix = var.project                            # all other resources (account-scoped)
 }
 
@@ -28,7 +28,7 @@ locals {
 # ---------------------------------------------------------------------------
 
 resource "aws_s3_bucket" "app" {
-  bucket = "${local.global_prefix}-app"
+  bucket = local.global_prefix
 }
 
 resource "aws_s3_bucket_versioning" "app" {
@@ -141,7 +141,7 @@ resource "aws_ecr_lifecycle_policy" "batch_lambda" {
 }
 
 # ---------------------------------------------------------------------------
-# IAM — API Lambda role (brief section 3.5: "read-only on the predictions/
+# IAM — server Lambda role (brief section 3.5: "read-only on the predictions/
 # prefix and read-only on the DynamoDB table and GSI. No access to data/ or
 # models/.")
 # ---------------------------------------------------------------------------
@@ -157,17 +157,17 @@ data "aws_iam_policy_document" "lambda_assume" {
   }
 }
 
-resource "aws_iam_role" "api_lambda" {
-  name               = "${local.scoped_prefix}-api-lambda-role"
+resource "aws_iam_role" "server_lambda" {
+  name               = "${local.scoped_prefix}-server-lambda-role"
   assume_role_policy = data.aws_iam_policy_document.lambda_assume.json
 }
 
-resource "aws_iam_role_policy_attachment" "api_lambda_basic" {
-  role       = aws_iam_role.api_lambda.name
+resource "aws_iam_role_policy_attachment" "server_lambda_basic" {
+  role       = aws_iam_role.server_lambda.name
   policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
 }
 
-data "aws_iam_policy_document" "api_lambda_permissions" {
+data "aws_iam_policy_document" "server_lambda_permissions" {
   statement {
     sid    = "ReadPredictions"
     effect = "Allow"
@@ -195,10 +195,10 @@ data "aws_iam_policy_document" "api_lambda_permissions" {
   }
 }
 
-resource "aws_iam_role_policy" "api_lambda_permissions" {
-  name   = "${local.scoped_prefix}-api-lambda-permissions"
-  role   = aws_iam_role.api_lambda.id
-  policy = data.aws_iam_policy_document.api_lambda_permissions.json
+resource "aws_iam_role_policy" "server_lambda_permissions" {
+  name   = "${local.scoped_prefix}-server-lambda-permissions"
+  role   = aws_iam_role.server_lambda.id
+  policy = data.aws_iam_policy_document.server_lambda_permissions.json
 }
 
 # ---------------------------------------------------------------------------
@@ -334,7 +334,7 @@ resource "aws_cloudwatch_log_group" "batch" {
 }
 
 # ---------------------------------------------------------------------------
-# Lambda — API (zip)
+# Lambda — server (zip)
 #
 # This zip only contains the project's own .py files, no dependencies —
 # enough for the first `terraform apply` to succeed, same placeholder pattern
@@ -342,21 +342,21 @@ resource "aws_cloudwatch_log_group" "batch" {
 # (scripts/package_lambda.sh) and pushes it via `update-function-code`.
 # ---------------------------------------------------------------------------
 
-data "archive_file" "api_src" {
+data "archive_file" "server_src" {
   type        = "zip"
   source_dir  = "${path.module}/../src"
-  output_path = "${path.module}/.placeholder-api-lambda.zip"
+  output_path = "${path.module}/.placeholder-server-lambda.zip"
 }
 
-resource "aws_lambda_function" "api" {
-  function_name    = "${local.scoped_prefix}-api"
-  role             = aws_iam_role.api_lambda.arn
+resource "aws_lambda_function" "server" {
+  function_name    = "${local.scoped_prefix}-server"
+  role             = aws_iam_role.server_lambda.arn
   runtime          = "python3.12"
   handler          = "market_regime_detector.server.main.handler"
-  filename         = data.archive_file.api_src.output_path
-  source_code_hash = data.archive_file.api_src.output_base64sha256
-  timeout          = var.api_lambda_timeout_seconds
-  memory_size      = var.api_lambda_memory_mb
+  filename         = data.archive_file.server_src.output_path
+  source_code_hash = data.archive_file.server_src.output_base64sha256
+  timeout          = var.server_lambda_timeout_seconds
+  memory_size      = var.server_lambda_memory_mb
 
   environment {
     variables = {
@@ -376,20 +376,23 @@ resource "aws_lambda_function" "api" {
   }
 }
 
-resource "aws_cloudwatch_log_group" "api" {
-  name              = "/aws/lambda/${aws_lambda_function.api.function_name}"
+resource "aws_cloudwatch_log_group" "server" {
+  name              = "/aws/lambda/${aws_lambda_function.server.function_name}"
   retention_in_days = 30
 }
 
-resource "aws_lambda_function_url" "api" {
-  function_name      = aws_lambda_function.api.function_name
+resource "aws_lambda_function_url" "server" {
+  function_name      = aws_lambda_function.server.function_name
   authorization_type = "NONE"
 }
 
 # ---------------------------------------------------------------------------
-# EventBridge — daily trigger, weekdays (brief section 3.5; a plain
-# CloudWatch Events Rule, not EventBridge Scheduler — see CLAUDE.md), with a
-# retry policy and an SQS dead-letter queue for failed invocations.
+# EventBridge — two independently-scheduled cron jobs against the *same*
+# batch-lambda function (brief section 3.5; a plain CloudWatch Events Rule,
+# not EventBridge Scheduler): a weekly ingestion run and a
+# daily prediction run, dispatched by `prediction/handler.py` on each
+# target's `action` input payload. One shared retry policy + SQS
+# dead-letter queue for failed invocations of either.
 # ---------------------------------------------------------------------------
 
 resource "aws_sqs_queue" "batch_dlq" {
@@ -409,7 +412,10 @@ data "aws_iam_policy_document" "batch_dlq_policy" {
     condition {
       test     = "ArnEquals"
       variable = "aws:SourceArn"
-      values   = [aws_cloudwatch_event_rule.batch_daily.arn]
+      values = [
+        aws_cloudwatch_event_rule.predict_batch_lambda.arn,
+        aws_cloudwatch_event_rule.ingest_batch_lambda.arn,
+      ]
     }
   }
 }
@@ -419,16 +425,19 @@ resource "aws_sqs_queue_policy" "batch_dlq" {
   policy    = data.aws_iam_policy_document.batch_dlq_policy.json
 }
 
-resource "aws_cloudwatch_event_rule" "batch_daily" {
-  name                = "${local.scoped_prefix}-batch-daily"
-  description         = "Triggers the '${local.scoped_prefix}-batch' Lambda daily on weekdays"
-  schedule_expression = var.batch_schedule_expression
+# --- Daily: predict (nowcast off whatever's already in the lake) ------------
+
+resource "aws_cloudwatch_event_rule" "predict_batch_lambda" {
+  name                = "${local.scoped_prefix}-predict-batch-lambda"
+  description         = "Triggers the '${local.scoped_prefix}-batch' Lambda with action=predict, daily on weekdays"
+  schedule_expression = var.batch_predict_schedule_expression
 }
 
-resource "aws_cloudwatch_event_target" "batch_lambda" {
-  rule      = aws_cloudwatch_event_rule.batch_daily.name
-  target_id = "${local.scoped_prefix}-batch-lambda"
+resource "aws_cloudwatch_event_target" "predict_batch_lambda" {
+  rule      = aws_cloudwatch_event_rule.predict_batch_lambda.name
+  target_id = "${local.scoped_prefix}-predict-batch-lambda"
   arn       = aws_lambda_function.batch.arn
+  input     = jsonencode({ action = "predict" })
 
   retry_policy {
     maximum_retry_attempts       = 2
@@ -440,12 +449,44 @@ resource "aws_cloudwatch_event_target" "batch_lambda" {
   }
 }
 
-resource "aws_lambda_permission" "eventbridge_batch" {
-  statement_id  = "AllowEventBridgeInvoke"
+resource "aws_lambda_permission" "eventbridge_predict_batch_lambda" {
+  statement_id  = "AllowEventBridgeInvokePredict"
   action        = "lambda:InvokeFunction"
   function_name = aws_lambda_function.batch.function_name
   principal     = "events.amazonaws.com"
-  source_arn    = aws_cloudwatch_event_rule.batch_daily.arn
+  source_arn    = aws_cloudwatch_event_rule.predict_batch_lambda.arn
+}
+
+# --- Weekly: ingest (refresh the lake from every first-pass provider) -------
+
+resource "aws_cloudwatch_event_rule" "ingest_batch_lambda" {
+  name                = "${local.scoped_prefix}-ingest-batch-lambda"
+  description         = "Triggers the '${local.scoped_prefix}-batch' Lambda with action=ingest, weekly"
+  schedule_expression = var.batch_ingest_schedule_expression
+}
+
+resource "aws_cloudwatch_event_target" "ingest_batch_lambda" {
+  rule      = aws_cloudwatch_event_rule.ingest_batch_lambda.name
+  target_id = "${local.scoped_prefix}-ingest-batch-lambda"
+  arn       = aws_lambda_function.batch.arn
+  input     = jsonencode({ action = "ingest" })
+
+  retry_policy {
+    maximum_retry_attempts       = 2
+    maximum_event_age_in_seconds = 3600
+  }
+
+  dead_letter_config {
+    arn = aws_sqs_queue.batch_dlq.arn
+  }
+}
+
+resource "aws_lambda_permission" "eventbridge_ingest_batch_lambda" {
+  statement_id  = "AllowEventBridgeInvokeIngest"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.batch.function_name
+  principal     = "events.amazonaws.com"
+  source_arn    = aws_cloudwatch_event_rule.ingest_batch_lambda.arn
 }
 
 # ---------------------------------------------------------------------------
@@ -485,7 +526,7 @@ resource "aws_cloudwatch_metric_alarm" "batch_errors" {
 
 # ---------------------------------------------------------------------------
 # IAM — GitHub Actions user (Terraform apply + ECR push + both Lambdas' code
-# update). Static access key, not OIDC — see CLAUDE.md.
+# update). Static access key, not OIDC.
 # ---------------------------------------------------------------------------
 
 resource "aws_iam_user" "github_actions" {
@@ -521,7 +562,7 @@ data "aws_iam_policy_document" "github_actions" {
       "lambda:UpdateFunctionCode",
       "lambda:GetFunction",
     ]
-    resources = [aws_lambda_function.batch.arn, aws_lambda_function.api.arn]
+    resources = [aws_lambda_function.batch.arn, aws_lambda_function.server.arn]
   }
 
   statement {

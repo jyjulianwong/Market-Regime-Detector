@@ -70,7 +70,7 @@ def fit_hmm(
 
     `covariance_type="diag"` is a judgment call (the brief only specifies
     `GaussianHMM(n_components=2)`) — the standard, stable default for a handful of
-    features over a few hundred monthly points (see CLAUDE.md).
+    features over a few hundred monthly points.
 
     Multiple random restarts; among restarts whose fit **passes both sanity checks**
     (composite separation > `composite_separation_margin`, both states' expected

@@ -7,8 +7,8 @@ def test_defaults_load_without_any_env_vars() -> None:
     settings = Settings(_env_file=None)  # type: ignore[call-arg]
 
     assert settings.aws_region == "eu-west-2"
-    assert settings.s3_bucket_name == "market-regime-detector"
-    assert settings.dynamodb_table_name == "market-regime-detector-models"
+    assert settings.s3_bucket_name == "004246189700-jyjulianwong-mrd"
+    assert settings.dynamodb_table_name == "jyjulianwong-mrd-models"
     assert settings.log_level == "INFO"
 
 

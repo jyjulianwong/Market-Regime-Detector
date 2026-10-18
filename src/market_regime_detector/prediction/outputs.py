@@ -45,7 +45,7 @@ def to_latest_json(result: PredictionResult) -> dict[str, object]:
 def to_history_json(result: PredictionResult) -> dict[str, object]:
     """The full daily series computed *in this run* — not an incremental append
     across runs. Simpler, avoids merge/dedup logic; a deliberate scope reduction
-    from a literal "accumulate forever" reading, flagged in CLAUDE.md.
+    from a literal "accumulate forever" reading.
     """
     history = result.history.reset_index(names="date")
     records = [

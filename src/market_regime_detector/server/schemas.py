@@ -51,7 +51,7 @@ class LatestSnapshot(BaseModel):
 class LatestPredictionResponse(BaseModel):
     """Brief section 5's shape. `disclaimer` has a default so it's present even
     though this is "every response that contains regime information" (brief
-    section 3.4), not literally every endpoint — see CLAUDE.md.
+    section 3.4), not literally every endpoint.
     """
 
     model_id: str

@@ -5,7 +5,8 @@ import pandas as pd
 
 def identity(series: pd.Series) -> pd.Series:
     """No-op transform — for the one feature (T10Y2Y) fed as a raw level rather than
-    a rate of change (see CLAUDE.md for why this is a deliberate exception).
+    a rate of change (a deliberate exception — a yield spread is already a relative/
+    directional quantity, not an absolute level like a price index).
     """
     return series
 

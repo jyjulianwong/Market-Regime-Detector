@@ -13,8 +13,11 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="MRD_", env_file=".env", extra="ignore")
 
     aws_region: str = "eu-west-2"
-    s3_bucket_name: str = "market-regime-detector"
-    dynamodb_table_name: str = "market-regime-detector-models"
+    # Match terraform/main.tf's actual deployed names (local.global_prefix /
+    # local.scoped_prefix) — these defaults are placeholders for local dev only;
+    # Terraform always sets the real values as Lambda env vars.
+    s3_bucket_name: str = "004246189700-jyjulianwong-mrd"
+    dynamodb_table_name: str = "jyjulianwong-mrd-models"
     log_level: str = "INFO"
 
     # Shared by FredProvider and AlfredProvider — both are the same underlying

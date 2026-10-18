@@ -15,7 +15,7 @@ htmlcov/
 # Lambda packaging artifacts (scripts/package_lambda.sh)
 /build/
 
-# Terraform placeholder API Lambda zip (terraform/main.tf's archive_file)
+# Terraform placeholder server Lambda zip (terraform/main.tf's archive_file)
 terraform/.placeholder-*.zip
 
 # Terraform

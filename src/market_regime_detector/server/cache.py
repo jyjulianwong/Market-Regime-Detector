@@ -32,6 +32,6 @@ class TTLCache:
         self._store.clear()
 
 
-# Brief says "short-TTL," not an exact duration — 30s is a judgment call,
-# documented in CLAUDE.md. Tests clear this between cases (see tests/server/conftest.py).
+# Brief says "short-TTL," not an exact duration — 30s is a judgment call.
+# Tests clear this between cases (see tests/server/conftest.py).
 CACHE = TTLCache(ttl_seconds=30.0)

@@ -31,7 +31,10 @@ def mocked_dependencies() -> Generator[dict[str, MagicMock], None, None]:
         }
 
 
-def test_empty_event_resolves_production_lake_latest_defaults(
+# --- action="predict" --------------------------------------------------------
+
+
+def test_empty_event_defaults_to_predict_with_production_lake_latest(
     mocked_dependencies: dict[str, MagicMock],
 ) -> None:
     response = handler({})
@@ -46,15 +49,28 @@ def test_empty_event_resolves_production_lake_latest_defaults(
     assert response["model_id"] == "mrd-20260101-abcdef12"
 
 
+def test_predict_action_never_runs_ingestion(mocked_dependencies: dict[str, MagicMock]) -> None:
+    handler({"action": "predict"})
+
+    mocked_dependencies["ingest_incremental"].assert_not_called()
+
+
 def test_explicit_model_id_in_event_is_honored(mocked_dependencies: dict[str, MagicMock]) -> None:
-    handler({"model_id": "mrd-20250101-deadbeef"})
+    handler({"action": "predict", "model_id": "mrd-20250101-deadbeef"})
 
     _args, kwargs = mocked_dependencies["run_prediction"].call_args
     assert kwargs["model_id"] == "mrd-20250101-deadbeef"
 
 
 def test_explicit_dates_are_parsed_from_event(mocked_dependencies: dict[str, MagicMock]) -> None:
-    handler({"start": "2024-01-01", "end": "2024-02-01", "asof": "2024-02-01"})
+    handler(
+        {
+            "action": "predict",
+            "start": "2024-01-01",
+            "end": "2024-02-01",
+            "asof": "2024-02-01",
+        }
+    )
 
     _args, kwargs = mocked_dependencies["run_prediction"].call_args
     assert kwargs["start"].isoformat() == "2024-01-01"
@@ -62,27 +78,8 @@ def test_explicit_dates_are_parsed_from_event(mocked_dependencies: dict[str, Mag
     assert kwargs["asof"].isoformat() == "2024-02-01"
 
 
-def test_runs_incremental_ingestion_for_every_first_pass_series(
-    mocked_dependencies: dict[str, MagicMock],
-) -> None:
-    handler({})
-
-    assert mocked_dependencies["ingest_incremental"].call_count == len(FIRST_PASS_SERIES)
-
-
-def test_a_single_series_ingestion_failure_does_not_prevent_prediction(
-    mocked_dependencies: dict[str, MagicMock],
-) -> None:
-    mocked_dependencies["ingest_incremental"].side_effect = RuntimeError("provider is down")
-
-    handler({})  # must not raise
-
-    mocked_dependencies["run_prediction"].assert_called_once()
-    mocked_dependencies["write_prediction_outputs"].assert_called_once()
-
-
 def test_writes_outputs_after_prediction(mocked_dependencies: dict[str, MagicMock]) -> None:
-    handler({})
+    handler({"action": "predict"})
 
     write_outputs = mocked_dependencies["write_prediction_outputs"]
     write_outputs.assert_called_once()
@@ -90,3 +87,40 @@ def test_writes_outputs_after_prediction(mocked_dependencies: dict[str, MagicMoc
     assert s3_arg is mocked_dependencies["get_s3_client"].return_value
     assert isinstance(bucket_arg, str)
     assert result_arg is mocked_dependencies["result"]
+
+
+# --- action="ingest" ----------------------------------------------------------
+
+
+def test_ingest_action_runs_incremental_ingestion_for_every_first_pass_series(
+    mocked_dependencies: dict[str, MagicMock],
+) -> None:
+    handler({"action": "ingest"})
+
+    assert mocked_dependencies["ingest_incremental"].call_count == len(FIRST_PASS_SERIES)
+
+
+def test_ingest_action_never_runs_prediction(mocked_dependencies: dict[str, MagicMock]) -> None:
+    handler({"action": "ingest"})
+
+    mocked_dependencies["run_prediction"].assert_not_called()
+    mocked_dependencies["write_prediction_outputs"].assert_not_called()
+
+
+def test_a_single_series_ingestion_failure_does_not_prevent_others(
+    mocked_dependencies: dict[str, MagicMock],
+) -> None:
+    mocked_dependencies["ingest_incremental"].side_effect = RuntimeError("provider is down")
+
+    response = handler({"action": "ingest"})  # must not raise
+
+    assert response["series_ingested"] == 0
+    assert response["series_failed"] == [spec.series_id for spec in FIRST_PASS_SERIES]
+
+
+# --- dispatch -------------------------------------------------------------
+
+
+def test_unknown_action_raises(mocked_dependencies: dict[str, MagicMock]) -> None:
+    with pytest.raises(ValueError, match="unknown action"):
+        handler({"action": "bogus"})

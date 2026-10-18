@@ -142,8 +142,8 @@ Log-likelihood (full-history fit): {inflation_fit.log_likelihood:.2f}
 ## Baseline comparison (walk-forward, out-of-sample)
 
 Baseline: sign of a sign-weighted average of each axis's already-computed
-rate-of-change features (brief section 2.6 — see CLAUDE.md for why this reading of
-"change in a composite" rather than a second, unspecified level-based composite).
+rate-of-change features (brief section 2.6 — this reading of "change in a
+composite" was chosen over a second, unspecified level-based composite).
 
 - Growth: {growth_baseline_comparison["n_out_of_sample_months"]} out-of-sample
   months, {growth_baseline_comparison["label_agreement_with_baseline"]} label
@@ -172,6 +172,6 @@ truth regime label to score either model against.
 - The model trains on month-end decision dates; the daily batch job (Phase 6)
   evaluates features as of the run date (trailing windows ending that day, using
   only data published by then), not a strict month-end — see brief section 3.3.
-- `covariance_type="diag"` and the baseline composite definition are judgment calls
-  documented in `CLAUDE.md`, not brief-specified choices.
+- `covariance_type="diag"` and the baseline composite definition are judgment calls,
+  not brief-specified choices.
 """
