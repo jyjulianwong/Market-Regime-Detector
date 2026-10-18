@@ -42,7 +42,13 @@ def validate_schema(df: pd.DataFrame) -> pd.DataFrame:
 
     df["date"] = to_naive_utc(df["date"]).dt.normalize()
     df["realtime_start"] = to_naive_utc(df["realtime_start"]).dt.normalize()
-    df["value"] = df["value"].astype(float)
+    # pd.to_numeric, not .astype(float): a real ALFRED/fredapi quirk, not a bug in
+    # this codebase — fredapi's get_series_all_releases occasionally parses a
+    # withdrawn/missing revision's "." sentinel as NaT rather than NaN (seen on
+    # ICSA), which .astype(float) raises on but to_numeric(errors="coerce")
+    # correctly treats as a missing value for that vintage, matching the semantics
+    # of a genuinely unavailable observation.
+    df["value"] = pd.to_numeric(df["value"], errors="coerce")
     df["source"] = df["source"].astype(str)
     df["series_id"] = df["series_id"].astype(str)
     df["ingested_at"] = to_naive_utc(df["ingested_at"])

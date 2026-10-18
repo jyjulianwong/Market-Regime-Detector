@@ -74,6 +74,18 @@ def test_validate_schema_strips_timezone_from_tz_aware_timestamps() -> None:
     assert result["ingested_at"].dt.tz is None
 
 
+def test_validate_schema_coerces_unparseable_value_to_nan() -> None:
+    # Real fredapi quirk: get_series_all_releases occasionally parses ALFRED's "."
+    # (withdrawn/missing revision) sentinel as NaT instead of NaN (seen on ICSA) —
+    # .astype(float) raises on that; this must coerce it to a missing value instead.
+    df = _raw_df(value=[pd.NaT, 2.0])
+
+    result = validate_schema(df)
+
+    assert pd.isna(result.loc[0, "value"])
+    assert result.loc[1, "value"] == 2.0
+
+
 def test_validate_schema_is_idempotent() -> None:
     df = _raw_df()
 

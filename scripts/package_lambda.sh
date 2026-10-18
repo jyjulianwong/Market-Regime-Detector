@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Packages the server Lambda zip (project + `api` extra deps) into build/lambda.zip.
+# Packages the server Lambda zip (project + `server` extra deps) into build/lambda.zip.
 #
 # Usage:
 #   ./scripts/package_lambda.sh
@@ -18,7 +18,7 @@ cd "$(dirname "$0")/.."
 rm -rf build/package build/lambda.zip
 mkdir -p build/package
 
-uv pip install --target build/package ".[api]"
+uv pip install --target build/package ".[server]"
 
 cd build/package
 zip -r -q ../lambda.zip . -x '*.pyc' -x '*/__pycache__/*'

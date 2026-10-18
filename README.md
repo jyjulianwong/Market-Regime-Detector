@@ -227,6 +227,22 @@ uv run python scripts/train_model.py --start 2000-01-01 --output-dir ./model
 uv run python scripts/publish_model.py --model-dir ./model --manifest-path ./model/manifest.json --stage staging
 uv run python scripts/promote_model.py --model-id <model_id printed above>
 ```
+`--start 2000-01-01` is earlier than every first-pass series actually needs — it's
+not an arbitrary round number, it's past the real binding constraint
+(`T10YIE`/`DFII10`, 2003) and right at the other (`HG=F`/`GC=F`, 2000-08-30), so
+going earlier buys nothing and going later would lose growth-axis history for no
+reason:
+
+| Series | Earliest available |
+|---|---|
+| INDPRO | 1919-01-01 |
+| PAYEMS | 1939-01-01 |
+| CPILFESL | 1957-01-01 |
+| ICSA | 1967-01-07 |
+| T10Y2Y | 1976-06-01 |
+| DCOILWTICO | 1986-01-02 |
+| HG=F, GC=F | 2000-08-30 |
+| T10YIE, DFII10 | 2003-01-02 |
 
 `promote_model.py` also best-effort async-invokes the batch Lambda so a first
 prediction exists immediately rather than waiting for the next 06:30 UTC run.
@@ -317,6 +333,7 @@ aws dynamodb scan \
 
 # Browse the S3 app bucket
 BUCKET=$(terraform -chdir=terraform output -raw app_bucket_name)
+aws s3 ls "s3://$BUCKET/data/"
 aws s3 ls "s3://$BUCKET/models/"
 aws s3 ls "s3://$BUCKET/predictions/"
 

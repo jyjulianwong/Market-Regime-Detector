@@ -12,7 +12,7 @@ dependencies = [
 [project.optional-dependencies]
 # Installed by the server Lambda / local uvicorn dev server. Deliberately excludes
 # pandas/numpy/hmmlearn so the read-only API has no inference-capable dependencies.
-api = [
+server = [
     "fastapi>=0.115,<0.116",
     "mangum>=0.19,<0.20",
     "uvicorn[standard]>=0.32,<0.33",
