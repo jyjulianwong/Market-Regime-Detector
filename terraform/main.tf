@@ -661,6 +661,7 @@ data "aws_iam_policy_document" "github_actions" {
       "kms:Describe*",
       "kms:List*",
       "logs:*",
+      "apigateway:*",
     ]
     resources = ["*"]
     condition {
