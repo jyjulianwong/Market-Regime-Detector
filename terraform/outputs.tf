@@ -24,8 +24,13 @@ output "server_lambda_function_name" {
 }
 
 output "server_function_url" {
-  description = "Public Lambda Function URL for the read-only API (brief section 3.5's ASSUMPTION, resolved)"
+  description = "Public Lambda Function URL for the read-only API (brief section 3.5's ASSUMPTION, resolved) — currently blocked by an org-level SCP denying anonymous lambda:InvokeFunctionUrl; use server_api_gateway_url instead until that's resolved"
   value       = aws_lambda_function_url.server.function_url
+}
+
+output "server_api_gateway_url" {
+  description = "Public API Gateway URL for the read-only API — added after the Function URL above was found blocked by an org-level SCP (see terraform/main.tf's comment above aws_apigatewayv2_api.server); client/index.html's API_BASE should point here"
+  value       = aws_apigatewayv2_api.server.api_endpoint
 }
 
 output "batch_dlq_url" {

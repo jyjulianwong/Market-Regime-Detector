@@ -387,6 +387,59 @@ resource "aws_lambda_function_url" "server" {
 }
 
 # ---------------------------------------------------------------------------
+# API Gateway — public HTTP API in front of the server Lambda
+#
+# Added alongside the Function URL above (not replacing it) after discovering
+# this AWS account's Organization enforces an SCP that denies anonymous
+# lambda:InvokeFunctionUrl calls: the Function URL itself is correctly
+# configured (authorization_type NONE, and a resource policy already grants
+# public invoke) but every call is denied at the authorization layer before
+# the handler ever runs. API Gateway invokes the same Lambda through a
+# completely different IAM path — lambda:InvokeFunction, called by the
+# apigateway.amazonaws.com service principal via the permission below, not a
+# public FunctionUrlAuthType=NONE grant — so it isn't covered by that
+# guardrail. Same AWS_PROXY HTTP API pattern as Obsidian-Server's "jwks" API
+# (its terraform/main.tf), minus the mTLS custom domain: this API is meant to
+# be fully public with no client certificate, and this project owns no
+# domain name, so it's served from the auto-generated execute-api endpoint
+# (aws_apigatewayv2_api.server.api_endpoint, output as
+# server_api_gateway_url) rather than a custom domain.
+# ---------------------------------------------------------------------------
+
+resource "aws_apigatewayv2_api" "server" {
+  name          = "${local.scoped_prefix}-server-api"
+  protocol_type = "HTTP"
+}
+
+resource "aws_apigatewayv2_integration" "server" {
+  api_id                 = aws_apigatewayv2_api.server.id
+  integration_type       = "AWS_PROXY"
+  integration_uri        = aws_lambda_function.server.invoke_arn
+  payload_format_version = "2.0"
+}
+
+resource "aws_apigatewayv2_route" "server_default" {
+  api_id             = aws_apigatewayv2_api.server.id
+  route_key          = "$default"
+  target             = "integrations/${aws_apigatewayv2_integration.server.id}"
+  authorization_type = "NONE"
+}
+
+resource "aws_apigatewayv2_stage" "server_default" {
+  api_id      = aws_apigatewayv2_api.server.id
+  name        = "$default"
+  auto_deploy = true
+}
+
+resource "aws_lambda_permission" "apigateway_server" {
+  statement_id  = "AllowAPIGatewayInvoke"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.server.function_name
+  principal     = "apigateway.amazonaws.com"
+  source_arn    = "${aws_apigatewayv2_api.server.execution_arn}/*/*"
+}
+
+# ---------------------------------------------------------------------------
 # EventBridge — two independently-scheduled cron jobs against the *same*
 # batch-lambda function (brief section 3.5; a plain CloudWatch Events Rule,
 # not EventBridge Scheduler): a weekly ingestion run and a

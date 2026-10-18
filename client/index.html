@@ -1,0 +1,413 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Market Regime Detector</title>
+  <link rel="icon" href="favicon.ico" sizes="32x32">
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="apple-touch-icon.png">
+  <link rel="manifest" href="site.webmanifest">
+  <meta name="theme-color" content="#1a3a5c">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Open+Sans:ital,wght@0,300..800;1,300..800&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: "Open Sans", sans-serif;
+      background: #f5f7fa;
+      color: #222;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    header {
+      background: #1a3a5c;
+      color: #fff;
+      padding: 18px 32px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    header h1 { font-size: 1.2rem; font-weight: 600; letter-spacing: 0.01em; }
+    header .asof {
+      font-size: 0.82rem;
+      color: #a8c8e8;
+    }
+
+    main {
+      flex: 1;
+      max-width: 720px;
+      width: 100%;
+      margin: 48px auto;
+      padding: 0 24px;
+    }
+
+    .card {
+      background: #fff;
+      border-radius: 10px;
+      box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+      padding: 32px;
+    }
+    .card + .card { margin-top: 24px; }
+
+    .card h2 { font-size: 1.1rem; margin-bottom: 8px; color: #1a3a5c; }
+    .card p.subtitle { font-size: 0.88rem; color: #666; margin-bottom: 24px; }
+
+    #loading { color: #888; font-size: 0.9rem; }
+    #error {
+      display: none;
+      color: #c0392b;
+      font-size: 0.88rem;
+      background: #fdf0ef;
+      border: 1px solid #f3d6d3;
+      border-radius: 6px;
+      padding: 12px 14px;
+    }
+
+    #content { display: none; }
+
+    .stale-banner {
+      display: none;
+      background: #fdf6e3;
+      border: 1px solid #f0dca0;
+      color: #8a6d1f;
+      border-radius: 6px;
+      padding: 10px 14px;
+      font-size: 0.85rem;
+      margin-bottom: 20px;
+    }
+
+    .regime-headline { text-align: center; margin-bottom: 28px; }
+    .regime-headline .label {
+      font-size: 1.6rem;
+      font-weight: 700;
+      color: #1a3a5c;
+    }
+    .regime-headline .raw {
+      font-size: 0.8rem;
+      color: #999;
+      font-family: ui-monospace, "SF Mono", Consolas, monospace;
+      margin-top: 4px;
+    }
+    .regime-headline .confidence {
+      margin-top: 10px;
+      font-size: 0.95rem;
+      color: #444;
+    }
+    .regime-headline .confidence b { color: #1a3a5c; }
+
+    .quadrant-grid {
+      display: grid;
+      grid-template-columns: auto 1fr 1fr;
+      grid-template-rows: auto 1fr 1fr;
+      gap: 6px;
+      margin-bottom: 28px;
+    }
+    .q-axis-label {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.72rem;
+      font-weight: 600;
+      color: #888;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+    .q-axis-label.inflation-up,
+    .q-axis-label.inflation-down {
+      writing-mode: vertical-rl;
+      transform: rotate(180deg);
+    }
+    .q-cell {
+      border-radius: 8px;
+      padding: 16px 10px;
+      text-align: center;
+      background: #f5f7fa;
+      border: 1px solid #e4e9f0;
+      transition: background 0.15s, border-color 0.15s;
+    }
+    .q-cell .q-name {
+      font-size: 0.78rem;
+      font-weight: 600;
+      color: #555;
+      margin-bottom: 6px;
+    }
+    .q-cell .q-pct {
+      font-size: 1.3rem;
+      font-weight: 700;
+      color: #1a3a5c;
+    }
+    .q-cell.active {
+      background: #1a3a5c;
+      border-color: #1a3a5c;
+    }
+    .q-cell.active .q-name { color: #a8c8e8; }
+    .q-cell.active .q-pct { color: #fff; }
+
+    .axis-bars { margin-bottom: 8px; }
+    .axis-bar { margin-bottom: 18px; }
+    .axis-bar:last-child { margin-bottom: 0; }
+    .axis-bar .axis-row {
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.85rem;
+      color: #444;
+      margin-bottom: 6px;
+    }
+    .axis-bar .axis-row b { color: #1a3a5c; }
+    .axis-bar .track {
+      height: 8px;
+      background: #e8edf3;
+      border-radius: 4px;
+      overflow: hidden;
+    }
+    .axis-bar .fill {
+      height: 100%;
+      background: #2c5f8a;
+      border-radius: 4px;
+    }
+
+    .meta-table {
+      font-size: 0.85rem;
+      color: #555;
+      border-top: 1px solid #eee;
+      padding-top: 16px;
+      margin-top: 24px;
+    }
+    .meta-table .row {
+      display: flex;
+      justify-content: space-between;
+      padding: 4px 0;
+    }
+    .meta-table .row span:first-child { color: #999; }
+    .meta-table .row span:last-child {
+      font-family: ui-monospace, "SF Mono", Consolas, monospace;
+      font-size: 0.8rem;
+      text-align: right;
+    }
+
+    .warnings {
+      margin-top: 16px;
+      font-size: 0.82rem;
+      color: #8a6d1f;
+    }
+    .warnings li { margin-left: 18px; margin-top: 2px; }
+
+    .disclaimer {
+      margin-top: 24px;
+      font-size: 0.78rem;
+      color: #999;
+      text-align: center;
+    }
+
+    footer {
+      text-align: center;
+      font-size: 0.78rem;
+      color: #aaa;
+      padding: 24px;
+    }
+    footer a { color: #888; }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>Market Regime Detector</h1>
+  <span class="asof" id="header-asof"></span>
+</header>
+
+<main>
+  <div class="card">
+    <h2>Current Macro Regime</h2>
+    <p class="subtitle">
+      A causal, point-in-time nowcast of the Bridgewater All Weather growth/inflation
+      quadrant, from two independent 2-state Gaussian HMMs run against FRED, ALFRED,
+      and market data.
+    </p>
+
+    <div id="loading">Loading latest regime…</div>
+    <div id="error"></div>
+
+    <div id="content">
+      <div class="stale-banner" id="stale-banner"></div>
+
+      <div class="regime-headline">
+        <div class="label" id="regime-label">—</div>
+        <div class="raw" id="regime-raw">—</div>
+        <div class="confidence">Confidence: <b id="regime-confidence">—</b></div>
+      </div>
+
+      <div class="quadrant-grid">
+        <div></div>
+        <div class="q-axis-label">Growth ↑</div>
+        <div class="q-axis-label">Growth ↓</div>
+
+        <div class="q-axis-label inflation-up">Inflation ↑</div>
+        <div class="q-cell" id="q-GROWTH_UP_INFLATION_UP">
+          <div class="q-name">Reflation</div>
+          <div class="q-pct">—</div>
+        </div>
+        <div class="q-cell" id="q-GROWTH_DOWN_INFLATION_UP">
+          <div class="q-name">Stagflation</div>
+          <div class="q-pct">—</div>
+        </div>
+
+        <div class="q-axis-label inflation-down">Inflation ↓</div>
+        <div class="q-cell" id="q-GROWTH_UP_INFLATION_DOWN">
+          <div class="q-name">Disinflationary growth</div>
+          <div class="q-pct">—</div>
+        </div>
+        <div class="q-cell" id="q-GROWTH_DOWN_INFLATION_DOWN">
+          <div class="q-name">Deflation</div>
+          <div class="q-pct">—</div>
+        </div>
+      </div>
+
+      <div class="axis-bars">
+        <div class="axis-bar">
+          <div class="axis-row">
+            <span>P(Growth up)</span>
+            <b id="p-growth-up">—</b>
+          </div>
+          <div class="track"><div class="fill" id="p-growth-up-fill" style="width:0%"></div></div>
+        </div>
+        <div class="axis-bar">
+          <div class="axis-row">
+            <span>P(Inflation up)</span>
+            <b id="p-inflation-up">—</b>
+          </div>
+          <div class="track"><div class="fill" id="p-inflation-up-fill" style="width:0%"></div></div>
+        </div>
+      </div>
+
+      <ul class="warnings" id="warnings-list" style="display:none"></ul>
+
+      <div class="meta-table">
+        <div class="row"><span>As of</span><span id="meta-asof">—</span></div>
+        <div class="row"><span>Observation date</span><span id="meta-observation">—</span></div>
+        <div class="row"><span>Generated</span><span id="meta-generated">—</span></div>
+        <div class="row"><span>Model</span><span id="meta-model">—</span></div>
+      </div>
+
+      <p class="disclaimer" id="disclaimer-text"></p>
+    </div>
+  </div>
+</main>
+
+<footer>
+  <a href="https://github.com/jyjulianwong/Market-Regime-Detector" target="_blank" rel="noopener">
+    jyjulianwong/Market-Regime-Detector
+  </a>
+</footer>
+
+<script>
+  // Set by Terraform's server_api_gateway_url output — see terraform/main.tf
+  // (aws_apigatewayv2_api.server). NOT the Lambda Function URL
+  // (server_function_url) — that's blocked by this AWS account's org-level
+  // SCP denying anonymous lambda:InvokeFunctionUrl, which is why this project
+  // fronts the same server Lambda with API Gateway instead. Update manually
+  // after `terraform apply` if this value ever changes.
+  const API_BASE = "https://6nbosjpuc9.execute-api.eu-west-2.amazonaws.com";
+
+  const QUADRANT_LABELS = {
+    GROWTH_UP_INFLATION_UP: "Reflation",
+    GROWTH_DOWN_INFLATION_UP: "Stagflation",
+    GROWTH_UP_INFLATION_DOWN: "Disinflationary growth",
+    GROWTH_DOWN_INFLATION_DOWN: "Deflation",
+  };
+
+  const loadingEl = document.getElementById("loading");
+  const errorEl = document.getElementById("error");
+  const contentEl = document.getElementById("content");
+  const headerAsofEl = document.getElementById("header-asof");
+
+  function pct(x) {
+    return (x * 100).toFixed(1) + "%";
+  }
+
+  function formatTimestamp(iso) {
+    const d = new Date(iso);
+    return d.toLocaleString(undefined, {
+      dateStyle: "medium",
+      timeStyle: "short",
+    });
+  }
+
+  function render(data) {
+    headerAsofEl.textContent = `As of ${data.asof}`;
+
+    const staleBanner = document.getElementById("stale-banner");
+    if (data.is_stale) {
+      staleBanner.style.display = "block";
+      staleBanner.textContent =
+        "This result is flagged stale — one or more inputs may be out of date, " +
+        "or the batch job hasn't run recently. Treat with extra caution.";
+    }
+
+    if (!data.latest) {
+      errorEl.style.display = "block";
+      errorEl.textContent = "No regime estimate is available for this model yet.";
+      loadingEl.style.display = "none";
+      return;
+    }
+
+    const latest = data.latest;
+    const regimeLabel = QUADRANT_LABELS[latest.regime] || latest.regime;
+
+    document.getElementById("regime-label").textContent = regimeLabel;
+    document.getElementById("regime-raw").textContent = latest.regime;
+    document.getElementById("regime-confidence").textContent = pct(latest.confidence);
+
+    document.getElementById("p-growth-up").textContent = pct(latest.p_growth_up);
+    document.getElementById("p-growth-up-fill").style.width = pct(latest.p_growth_up);
+    document.getElementById("p-inflation-up").textContent = pct(latest.p_inflation_up);
+    document.getElementById("p-inflation-up-fill").style.width = pct(latest.p_inflation_up);
+
+    for (const [name, label] of Object.entries(QUADRANT_LABELS)) {
+      const cell = document.getElementById(`q-${name}`);
+      cell.querySelector(".q-pct").textContent = pct(latest.quadrants[name]);
+      cell.classList.toggle("active", name === latest.regime);
+    }
+
+    const warningsList = document.getElementById("warnings-list");
+    if (data.warnings && data.warnings.length > 0) {
+      warningsList.style.display = "block";
+      warningsList.innerHTML = data.warnings.map(w => `<li>${w}</li>`).join("");
+    }
+
+    document.getElementById("meta-asof").textContent = data.asof;
+    document.getElementById("meta-observation").textContent = data.observation_date || "—";
+    document.getElementById("meta-generated").textContent = formatTimestamp(data.generated_at);
+    document.getElementById("meta-model").textContent = data.model_id;
+
+    document.getElementById("disclaimer-text").textContent = data.disclaimer;
+
+    loadingEl.style.display = "none";
+    contentEl.style.display = "block";
+  }
+
+  async function loadLatest() {
+    try {
+      const resp = await fetch(`${API_BASE}/v1/predictions/latest`);
+      if (!resp.ok) {
+        const err = await resp.json().catch(() => ({}));
+        throw new Error(err.detail || `HTTP ${resp.status}`);
+      }
+      const data = await resp.json();
+      render(data);
+    } catch (err) {
+      loadingEl.style.display = "none";
+      errorEl.style.display = "block";
+      errorEl.textContent = `Failed to load the latest regime: ${err.message}`;
+    }
+  }
+
+  loadLatest();
+</script>
+
+</body>
+</html>
