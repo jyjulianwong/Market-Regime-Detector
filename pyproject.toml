@@ -1,6 +1,6 @@
 [project]
 name = "market-regime-detector"
-version = "2026.10.18.3"
+version = "2026.10.18.4"
 description = "Nowcasts Bridgewater All Weather macro quadrants from a daily batch HMM pipeline, served by a read-only API."
 requires-python = ">=3.12"
 dependencies = [
