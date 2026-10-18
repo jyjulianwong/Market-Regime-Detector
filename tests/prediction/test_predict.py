@@ -306,6 +306,11 @@ def test_run_prediction_is_stale_when_raw_inputs_lag_asof(
     """`observation_date` correctly stays at `effective_end` — `as_of_lookup`
     forward-fills the last known value, so the feature itself stays "available."
     `is_stale` is what must catch the underlying series having gone quiet.
+
+    Both series are declared MONTHLY (`_feature_config`), so the gap has to clear
+    that frequency's own tolerance (one full publication cycle plus slack, not a
+    flat few days) to actually count as stale — see predict.py's
+    stale_tolerance_days_by_frequency.
     """
     s3, dynamodb = aws
     dates = [f"2024-01-{d:02d}" for d in range(1, 11)]  # data stops Jan 10
@@ -320,13 +325,13 @@ def test_run_prediction_is_stale_when_raw_inputs_lag_asof(
         BUCKET,
         TABLE_NAME,
         start=date(2024, 1, 1),
-        end=date(2024, 1, 20),
-        asof=date(2024, 1, 20),  # 10 days after the last available observation
+        end=date(2024, 3, 1),
+        asof=date(2024, 3, 1),  # 51 days after the last available observation
     )
 
-    assert result.observation_date == date(2024, 1, 20)
+    assert result.observation_date == date(2024, 3, 1)
     assert result.is_stale
-    assert any("no data in the last" in w for w in result.warnings)
+    assert any("no new vintage in the last" in w for w in result.warnings)
 
 
 def test_fetch_raw_series_rejects_unknown_source(aws: tuple[S3Client, DynamoDBClient]) -> None:
