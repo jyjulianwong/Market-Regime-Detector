@@ -1,8 +1,12 @@
+import logging
+
 import pandas as pd
 
 from market_regime_detector.common.feature_config import FeatureDefinition
 from market_regime_detector.common.forward_filter import filtered_posterior
 from market_regime_detector.training.trainer import fit_hmm
+
+logger = logging.getLogger(__name__)
 
 
 def walk_forward_evaluate(
@@ -29,9 +33,20 @@ def walk_forward_evaluate(
     `alpha` carries forward across a parameter change. Still fully causal: a
     segment's model is fit only on data strictly before that segment begins, and the
     segment's own posterior never looks past its own out-of-sample window.
+
+    **A fold whose expanding window no longer shows two separable regimes is a
+    recorded gap, not a fatal error for the whole evaluation**: `fit_hmm` still
+    hard-fails with no fallback for that fold's own fit (brief section 2.3's
+    sanity checks are never loosened here), but that failure is caught, logged, and
+    the fold's out-of-sample months are simply absent from the result rather than
+    aborting every other fold. `result.attrs["skipped_folds"]` lists what was
+    skipped and why; `result.attrs["n_folds_attempted"]` is the total fold count
+    (evaluated + skipped), so a caller can report "N of M folds evaluable" instead
+    of silently looking complete.
     """
     n = len(df)
     rows: list[dict[str, object]] = []
+    skipped_folds: list[dict[str, object]] = []
 
     fold_id = 0
     fold_start = initial_window_months
@@ -40,15 +55,37 @@ def walk_forward_evaluate(
         train_df = df.iloc[:fold_start]
         test_df = df.iloc[fold_start:fold_end]
 
-        fit_result = fit_hmm(
-            train_df,
-            feature_defs,
-            n_restarts=n_restarts,
-            covariance_type=covariance_type,
-            min_state_duration_months=min_state_duration_months,
-            composite_separation_margin=composite_separation_margin,
-            random_state=random_state,
-        )
+        try:
+            fit_result = fit_hmm(
+                train_df,
+                feature_defs,
+                n_restarts=n_restarts,
+                covariance_type=covariance_type,
+                min_state_duration_months=min_state_duration_months,
+                composite_separation_margin=composite_separation_margin,
+                random_state=random_state,
+            )
+        except ValueError as exc:
+            logger.warning(
+                "walk-forward fold %d (train through %s, test %s to %s) skipped: %s",
+                fold_id,
+                train_df.index.max().date(),
+                test_df.index.min().date(),
+                test_df.index.max().date(),
+                exc,
+            )
+            skipped_folds.append(
+                {
+                    "fold_id": fold_id,
+                    "train_end": str(train_df.index.max().date()),
+                    "test_start": str(test_df.index.min().date()),
+                    "test_end": str(test_df.index.max().date()),
+                    "reason": str(exc),
+                }
+            )
+            fold_id += 1
+            fold_start = fold_end
+            continue
 
         observations = (
             test_df[fit_result.feature_names].to_numpy() - fit_result.scaler_mean
@@ -77,4 +114,7 @@ def walk_forward_evaluate(
         fold_id += 1
         fold_start = fold_end
 
-    return pd.DataFrame(rows)
+    result = pd.DataFrame(rows)
+    result.attrs["skipped_folds"] = skipped_folds
+    result.attrs["n_folds_attempted"] = fold_id
+    return result

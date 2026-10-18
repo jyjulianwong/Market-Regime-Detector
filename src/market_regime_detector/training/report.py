@@ -96,6 +96,8 @@ def render_model_card(
     inflation_baseline_comparison: dict[str, object],
     quadrant_episode_report: pd.DataFrame,
     hyperparameters: dict[str, object],
+    growth_skipped_folds: list[dict[str, object]] | None = None,
+    inflation_skipped_folds: list[dict[str, object]] | None = None,
 ) -> str:
     """Brief section 4.1's `model_card.md`."""
 
@@ -108,6 +110,27 @@ def render_model_card(
                 f"| {durations[state]:.1f} |"
             )
         return "\n".join(lines)
+
+    def _skipped_folds_section() -> str:
+        growth_skipped = growth_skipped_folds or []
+        inflation_skipped = inflation_skipped_folds or []
+        if not growth_skipped and not inflation_skipped:
+            return ""
+        lines = [
+            "\n## Walk-forward coverage gaps\n",
+            "The following expanding-window folds found no separable two-state "
+            "structure (brief section 2.3's sanity checks) and were excluded from "
+            "the out-of-sample metrics above, rather than relaxing the checks or "
+            "aborting the whole evaluation:\n",
+        ]
+        for axis_name, skipped in (("Growth", growth_skipped), ("Inflation", inflation_skipped)):
+            for fold in skipped:
+                lines.append(
+                    f"- **{axis_name}**, fold {fold['fold_id']} (test "
+                    f"{fold['test_start']} to {fold['test_end']}, trained on data "
+                    f"through {fold['train_end']}): {fold['reason']}"
+                )
+        return "\n".join(lines) + "\n"
 
     return f"""# Model Card
 
@@ -159,7 +182,7 @@ truth regime label to score either model against.
 ## Known-episode validation (walk-forward quadrant, out-of-sample)
 
 {quadrant_episode_report.to_markdown(index=False)}
-
+{_skipped_folds_section()}
 ## Hyperparameters
 
 ```

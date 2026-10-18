@@ -155,15 +155,27 @@ def train_and_save_model(
                 "inflation_log_likelihood": inflation_fit.log_likelihood,
                 "growth_baseline_comparison": growth_comparison,
                 "inflation_baseline_comparison": inflation_comparison,
-                "n_growth_walk_forward_folds": (
+                "n_growth_walk_forward_folds_evaluated": (
                     int(growth_walk_forward["fold_id"].nunique())
                     if not growth_walk_forward.empty
                     else 0
                 ),
-                "n_inflation_walk_forward_folds": (
+                "n_growth_walk_forward_folds_attempted": growth_walk_forward.attrs.get(
+                    "n_folds_attempted", 0
+                ),
+                "growth_walk_forward_skipped_folds": growth_walk_forward.attrs.get(
+                    "skipped_folds", []
+                ),
+                "n_inflation_walk_forward_folds_evaluated": (
                     int(inflation_walk_forward["fold_id"].nunique())
                     if not inflation_walk_forward.empty
                     else 0
+                ),
+                "n_inflation_walk_forward_folds_attempted": inflation_walk_forward.attrs.get(
+                    "n_folds_attempted", 0
+                ),
+                "inflation_walk_forward_skipped_folds": inflation_walk_forward.attrs.get(
+                    "skipped_folds", []
                 ),
                 "quadrant_episode_report": quadrant_episodes.to_dict(orient="records"),
             },
@@ -180,5 +192,7 @@ def train_and_save_model(
         inflation_baseline_comparison=inflation_comparison,
         quadrant_episode_report=quadrant_episodes,
         hyperparameters=hp.to_dict(),
+        growth_skipped_folds=growth_walk_forward.attrs.get("skipped_folds", []),
+        inflation_skipped_folds=inflation_walk_forward.attrs.get("skipped_folds", []),
     )
     (output_dir / "model_card.md").write_text(model_card)
