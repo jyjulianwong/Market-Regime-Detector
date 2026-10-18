@@ -195,20 +195,41 @@ def run_prediction(
     # forward-fills the last known value, so a feature stays "available" long after
     # a series has actually stopped updating — checking the feature output's own
     # last date would almost never catch that.
-    raw_last_dates: list[pd.Timestamp] = []
+    #
+    # The tolerance is per series, not one flat window for every series: this
+    # feature set deliberately mixes native frequencies (INDPRO/PAYEMS/CPILFESL
+    # monthly with a 45/35/15-day publication_lag_days, ICSA weekly with 4 days,
+    # the rest daily with 0) — a single flat STALE_THRESHOLD_DAYS applied to all
+    # of them would mean a monthly series can *never* clear the bar even when
+    # freshly published, making is_stale permanently true regardless of pipeline
+    # health. Each series' own publication_lag_days (already tracked per feature
+    # for point-in-time causality, common/pit.py) sets its expected lag;
+    # STALE_THRESHOLD_DAYS is the grace period on top of that before a series
+    # still being behind its own expected cadence counts as actually stale.
+    lag_days_by_series: dict[str, int] = {}
+    for feature in artifact.feature_config.features:
+        if feature.is_ratio:
+            assert feature.numerator_series_id is not None
+            assert feature.denominator_series_id is not None
+            lag_days_by_series[feature.numerator_series_id] = feature.publication_lag_days
+            lag_days_by_series[feature.denominator_series_id] = feature.publication_lag_days
+        else:
+            lag_days_by_series[feature.series_id] = feature.publication_lag_days
+
+    stale_inputs = False
     for series_id, df in raw_by_series.items():
         if df.empty:
             warnings.append(f"no data available for series {series_id!r}")
-        else:
-            raw_last_dates.append(df["date"].max())
-    stale_inputs = (
-        bool(raw_last_dates)
-        and (effective_asof - min(raw_last_dates).date()).days > STALE_THRESHOLD_DAYS
-    )
-    if stale_inputs:
-        warnings.append(
-            f"at least one input series has no data in the last {STALE_THRESHOLD_DAYS} days"
-        )
+            continue
+        tolerance_days = lag_days_by_series[series_id] + STALE_THRESHOLD_DAYS
+        days_behind = (effective_asof - df["date"].max().date()).days
+        if days_behind > tolerance_days:
+            stale_inputs = True
+            warnings.append(
+                f"series {series_id!r} has no data in the last {days_behind} days "
+                f"(expected publication lag {lag_days_by_series[series_id]}d + "
+                f"{STALE_THRESHOLD_DAYS}d grace period)"
+            )
 
     evaluation_dates = pd.date_range(effective_start, effective_end, freq="D")
     growth_df = _build_daily_axis_df(
