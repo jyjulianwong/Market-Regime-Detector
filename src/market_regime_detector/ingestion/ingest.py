@@ -1,6 +1,6 @@
 from datetime import date, timedelta
 
-from market_regime_detector.common.s3 import get_s3_client
+from market_regime_detector.common.aws_s3 import get_s3_client
 from market_regime_detector.ingestion.lake import get_last_ingested_date, write_to_lake
 from market_regime_detector.ingestion.providers.factory import build_provider
 

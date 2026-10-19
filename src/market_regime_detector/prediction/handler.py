@@ -2,9 +2,9 @@ import logging
 from datetime import date
 from typing import Any
 
-from market_regime_detector.common.dynamodb import get_dynamodb_client
+from market_regime_detector.common.aws_dynamodb import get_dynamodb_client
+from market_regime_detector.common.aws_s3 import get_s3_client
 from market_regime_detector.common.logging import configure_logging
-from market_regime_detector.common.s3 import get_s3_client
 from market_regime_detector.common.settings import Settings, get_settings
 from market_regime_detector.ingestion.ingest import ingest_incremental
 from market_regime_detector.ingestion.series_catalog import FIRST_PASS_SERIES

@@ -129,11 +129,11 @@ resource "aws_ecr_lifecycle_policy" "batch_lambda" {
   policy = jsonencode({
     rules = [{
       rulePriority = 1
-      description  = "Keep last 10 images"
+      description  = "Keep only the latest image"
       selection = {
         tagStatus   = "any"
         countType   = "imageCountMoreThan"
-        countNumber = 10
+        countNumber = 1
       }
       action = { type = "expire" }
     }]

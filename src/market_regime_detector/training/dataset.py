@@ -18,7 +18,7 @@ from market_regime_detector.common.git_info import get_git_sha
 from market_regime_detector.ingestion.lake import read_series
 
 if TYPE_CHECKING:
-    # boto3-stubs is dev-only — see common/s3.py for why this must stay under
+    # boto3-stubs is dev-only — see common/aws_s3.py for why this must stay under
     # TYPE_CHECKING rather than a top-level import.
     from mypy_boto3_s3.client import S3Client
 

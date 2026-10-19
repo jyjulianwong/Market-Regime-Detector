@@ -17,9 +17,9 @@ import argparse
 import logging
 from datetime import date
 
-from market_regime_detector.common.dynamodb import get_dynamodb_client
+from market_regime_detector.common.aws_dynamodb import get_dynamodb_client
+from market_regime_detector.common.aws_s3 import get_s3_client
 from market_regime_detector.common.logging import configure_logging
-from market_regime_detector.common.s3 import get_s3_client
 from market_regime_detector.common.settings import get_settings
 from market_regime_detector.prediction.outputs import write_prediction_outputs
 from market_regime_detector.prediction.predict import run_prediction

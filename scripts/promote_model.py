@@ -15,8 +15,8 @@ its own.
 import argparse
 import logging
 
-from market_regime_detector.common.dynamodb import get_dynamodb_client
-from market_regime_detector.common.lambda_client import get_lambda_client
+from market_regime_detector.common.aws_dynamodb import get_dynamodb_client
+from market_regime_detector.common.aws_lambda import get_lambda_client
 from market_regime_detector.common.logging import configure_logging
 from market_regime_detector.common.model_registry import promote_model
 from market_regime_detector.common.settings import get_settings

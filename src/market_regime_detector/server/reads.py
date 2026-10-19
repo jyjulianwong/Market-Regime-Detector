@@ -4,7 +4,8 @@ from typing import Any
 
 from botocore.exceptions import ClientError
 
-from market_regime_detector.common.dynamodb import get_dynamodb_client
+from market_regime_detector.common.aws_dynamodb import get_dynamodb_client
+from market_regime_detector.common.aws_s3 import get_s3_client
 from market_regime_detector.common.model_registry import (
     ModelStage,
     get_model,
@@ -12,7 +13,6 @@ from market_regime_detector.common.model_registry import (
     list_all_models,
     list_models_by_stage,
 )
-from market_regime_detector.common.s3 import get_s3_client
 from market_regime_detector.server.cache import CACHE
 
 
