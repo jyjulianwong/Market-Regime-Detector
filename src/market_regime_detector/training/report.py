@@ -193,8 +193,14 @@ truth regime label to score either model against.
 
 - Independence assumption between growth and inflation axes is only approximate.
 - The model trains on month-end decision dates; the daily batch job (Phase 6)
-  evaluates features as of the run date (trailing windows ending that day, using
-  only data published by then), not a strict month-end — see brief section 3.3.
+  never runs the recursive forward filter at daily cadence. Each day previews one
+  `preview_posterior` step off the *previous completed month-end's* real monthly
+  filtered posterior, using that day's own trailing-window features (partial-month
+  for a mid-month run date, matching the month-end exactly when the run date
+  happens to land on one) — see brief section 3.3 and
+  `prediction/predict.py`'s `_axis_posteriors`. A day in the lookback window's
+  first partial month, before any completed month-end exists to anchor off, is
+  dropped rather than shown unanchored.
 - `covariance_type="diag"` and the baseline composite definition are judgment calls,
   not brief-specified choices.
 """

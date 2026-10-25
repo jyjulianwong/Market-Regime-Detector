@@ -3,6 +3,7 @@ from dataclasses import dataclass
 from datetime import UTC, date, datetime, timedelta
 from typing import TYPE_CHECKING
 
+import numpy as np
 import pandas as pd
 
 from market_regime_detector.common.feature_config import (
@@ -12,7 +13,7 @@ from market_regime_detector.common.feature_config import (
     used_series_ids,
 )
 from market_regime_detector.common.features import build_feature_value, build_ratio_feature_value
-from market_regime_detector.common.forward_filter import filtered_posterior
+from market_regime_detector.common.forward_filter import filtered_posterior, preview_posterior
 from market_regime_detector.common.model_registry import get_model, get_production_model
 from market_regime_detector.common.quadrants import quadrant_probabilities
 from market_regime_detector.ingestion.lake import read_series
@@ -28,9 +29,13 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-# Enough periods for the forward filter's start_prob initialization bias to wash
-# out — the same accepted simplification as Phase 4's walk-forward segments, not a
-# new kind of approximation.
+# Enough calendar days to cover ~24 monthly steps for the forward filter's
+# start_prob initialization bias to wash out — the same accepted simplification as
+# Phase 4's walk-forward segments, not a new kind of approximation. The monthly
+# filter (see `_axis_posteriors`) is what actually consumes this many steps; daily
+# rows are a one-step preview off of it, not an independent recursion, so this
+# number is sized for the monthly recursion, not the ~730 daily rows it also
+# happens to produce.
 DEFAULT_LOOKBACK_DAYS = 730
 
 
@@ -124,9 +129,29 @@ def _build_daily_axis_df(
     return pd.DataFrame(columns).dropna(how="any")
 
 
-def _p_up_series(
-    axis_df: pd.DataFrame, feature_names: list[str], artifact_fields: ModelArtifact, axis: Axis
+def _axis_posteriors(
+    daily_axis_df: pd.DataFrame,
+    monthly_axis_df: pd.DataFrame,
+    feature_names: list[str],
+    artifact_fields: ModelArtifact,
+    axis: Axis,
 ) -> pd.Series:
+    """`P(axis up)` for every day in `daily_axis_df`, kept consistent with the
+    monthly-trained transition matrix (Issue A): first runs the real recursive
+    `filtered_posterior` over `monthly_axis_df`'s month-end rows, then for each day
+    looks up the filtered posterior at the *previous* month-end (never the day's own
+    month-end, even when one exists in range) and takes exactly one
+    `preview_posterior` step from there using that day's own features. Days within
+    the same month all preview off the same anchor independently — there is no
+    recursion across days, so a month of near-identical daily observations can never
+    compound into the saturated/erratic probabilities a naive per-day
+    `filtered_posterior` call would produce.
+
+    A day whose month has no preceding month-end in `monthly_axis_df` (the first
+    partial month of the lookback window, or a month-end `dropna`'d out for missing
+    features) gets no anchor and is silently dropped — never chained across the gap
+    to some earlier, stale anchor.
+    """
     if axis == Axis.GROWTH:
         hmm, mean, scale = (
             artifact_fields.growth,
@@ -140,12 +165,62 @@ def _p_up_series(
             artifact_fields.inflation_scaler_scale,
         )
 
-    ordered = axis_df[feature_names]
-    standardized = (ordered.to_numpy() - mean) / scale
-    posterior = filtered_posterior(
-        standardized, hmm.start_prob, hmm.transition_matrix, hmm.means, hmm.variances
+    if monthly_axis_df.empty:
+        return pd.Series(dtype=float)
+
+    monthly_standardized = (monthly_axis_df[feature_names].to_numpy() - mean) / scale
+    alpha_monthly = filtered_posterior(
+        monthly_standardized, hmm.start_prob, hmm.transition_matrix, hmm.means, hmm.variances
     )
-    return pd.Series(posterior[:, hmm.up_state], index=axis_df.index)
+    month_ends = pd.DatetimeIndex(monthly_axis_df.index)
+    alpha_by_month_end = dict(zip(month_ends, alpha_monthly, strict=True))
+
+    posterior_rows: list[np.ndarray] = []
+    kept_dates: list[pd.Timestamp] = []
+    daily_index = pd.DatetimeIndex(daily_axis_df.index)
+    for period, group in daily_axis_df.groupby(daily_index.to_period("M")):
+        prior_month_ends = month_ends[month_ends < period.start_time]
+        if len(prior_month_ends) == 0:
+            continue
+        anchor = alpha_by_month_end[prior_month_ends[-1]]
+        observations = (group[feature_names].to_numpy() - mean) / scale
+        posterior_rows.append(
+            preview_posterior(anchor, hmm.transition_matrix, observations, hmm.means, hmm.variances)
+        )
+        kept_dates.extend(group.index)
+
+    if not posterior_rows:
+        return pd.Series(dtype=float)
+
+    posterior = np.concatenate(posterior_rows, axis=0)
+    return pd.Series(posterior[:, hmm.up_state], index=pd.DatetimeIndex(kept_dates))
+
+
+_EMPTY_HISTORY_COLUMNS = [
+    "p_growth_up",
+    "p_inflation_up",
+    "GROWTH_UP_INFLATION_DOWN",
+    "GROWTH_UP_INFLATION_UP",
+    "GROWTH_DOWN_INFLATION_UP",
+    "GROWTH_DOWN_INFLATION_DOWN",
+    "regime",
+    "confidence",
+]
+
+
+def _empty_prediction_result(
+    model_id: str, dataset_id: str, asof: date, warnings: list[str]
+) -> "PredictionResult":
+    return PredictionResult(
+        model_id=model_id,
+        dataset_id=dataset_id,
+        asof=asof,
+        generated_at=datetime.now(UTC),
+        observation_date=None,
+        is_stale=True,
+        warnings=warnings,
+        history=pd.DataFrame(columns=_EMPTY_HISTORY_COLUMNS),
+    )
 
 
 def run_prediction(
@@ -246,45 +321,59 @@ def run_prediction(
                 f"(expected within ~{tolerance_days}d for its publication cadence)"
             )
 
+    # Two evaluation grids: daily (what gets previewed and shown) and month-end
+    # (what the model was actually trained on — the only grid the real recursive
+    # `filtered_posterior` ever runs over). See `_axis_posteriors`.
     evaluation_dates = pd.date_range(effective_start, effective_end, freq="D")
-    growth_df = _build_daily_axis_df(
+    month_end_dates = pd.date_range(effective_start, effective_end, freq="ME")
+
+    growth_daily_df = _build_daily_axis_df(
         Axis.GROWTH, artifact.feature_config, raw_by_series, evaluation_dates
     )
-    inflation_df = _build_daily_axis_df(
+    inflation_daily_df = _build_daily_axis_df(
         Axis.INFLATION, artifact.feature_config, raw_by_series, evaluation_dates
     )
+    growth_monthly_df = _build_daily_axis_df(
+        Axis.GROWTH, artifact.feature_config, raw_by_series, month_end_dates
+    )
+    inflation_monthly_df = _build_daily_axis_df(
+        Axis.INFLATION, artifact.feature_config, raw_by_series, month_end_dates
+    )
 
-    common_dates = growth_df.index.intersection(inflation_df.index)
-    if len(common_dates) == 0:
+    common_daily_dates = growth_daily_df.index.intersection(inflation_daily_df.index)
+    if len(common_daily_dates) == 0:
         warnings.append("no usable observations in range — every day is missing a feature")
-        return PredictionResult(
-            model_id=resolved_model_id,
-            dataset_id=dataset_id,
-            asof=effective_asof,
-            generated_at=datetime.now(UTC),
-            observation_date=None,
-            is_stale=True,
-            warnings=warnings,
-            history=pd.DataFrame(
-                columns=[
-                    "p_growth_up",
-                    "p_inflation_up",
-                    "GROWTH_UP_INFLATION_DOWN",
-                    "GROWTH_UP_INFLATION_UP",
-                    "GROWTH_DOWN_INFLATION_UP",
-                    "GROWTH_DOWN_INFLATION_DOWN",
-                    "regime",
-                    "confidence",
-                ]
-            ),
-        )
+        return _empty_prediction_result(resolved_model_id, dataset_id, effective_asof, warnings)
 
-    p_growth_up = _p_up_series(
-        growth_df.loc[common_dates], artifact.growth.feature_names, artifact, Axis.GROWTH
+    p_growth_up = _axis_posteriors(
+        growth_daily_df.loc[common_daily_dates],
+        growth_monthly_df,
+        artifact.growth.feature_names,
+        artifact,
+        Axis.GROWTH,
     )
-    p_inflation_up = _p_up_series(
-        inflation_df.loc[common_dates], artifact.inflation.feature_names, artifact, Axis.INFLATION
+    p_inflation_up = _axis_posteriors(
+        inflation_daily_df.loc[common_daily_dates],
+        inflation_monthly_df,
+        artifact.inflation.feature_names,
+        artifact,
+        Axis.INFLATION,
     )
+
+    # A day surviving the feature-availability intersection above can still have no
+    # prior month-end anchor on one axis (e.g. that axis's month-end features
+    # happened to get `dropna`'d) — one more intersection to only keep days both
+    # axes actually previewed.
+    common_dates = p_growth_up.index.intersection(p_inflation_up.index)
+    if len(common_dates) == 0:
+        warnings.append(
+            "no usable observations in range — no day has a complete prior "
+            "month-end anchor for both axes"
+        )
+        return _empty_prediction_result(resolved_model_id, dataset_id, effective_asof, warnings)
+
+    p_growth_up = p_growth_up.loc[common_dates]
+    p_inflation_up = p_inflation_up.loc[common_dates]
 
     quadrants = pd.DataFrame(
         quadrant_probabilities(p_growth_up, p_inflation_up),  # type: ignore[arg-type]

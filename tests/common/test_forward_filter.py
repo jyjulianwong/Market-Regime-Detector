@@ -2,7 +2,7 @@ import numpy as np
 import pytest
 from hmmlearn.hmm import GaussianHMM
 
-from market_regime_detector.common.forward_filter import filtered_posterior
+from market_regime_detector.common.forward_filter import filtered_posterior, preview_posterior
 
 START_PROB = np.array([0.6, 0.4])
 TRANSITION_MATRIX = np.array([[0.9, 0.1], [0.2, 0.8]])
@@ -109,3 +109,99 @@ def test_various_sequence_lengths(n_timesteps: int) -> None:
     filtered = filtered_posterior(observations, START_PROB, TRANSITION_MATRIX, MEANS, VARIANCES)
 
     assert filtered.shape == (n_timesteps, 2)
+
+
+def test_filtered_posterior_handles_an_unreachable_state_without_nan() -> None:
+    """Regression test for a real `_logsumexp` bug: a transition matrix that makes
+    one state entirely unreachable from the other produces an exact-zero (not just
+    small) posterior for it at some step, and must not turn into `nan`."""
+    degenerate_transition = np.array([[1.0, 0.0], [0.0, 1.0]])
+    observations = _sample_observations(n_timesteps=5, seed=21)
+
+    filtered = filtered_posterior(
+        observations, np.array([1.0, 0.0]), degenerate_transition, MEANS, VARIANCES
+    )
+
+    assert not np.any(np.isnan(filtered))
+    np.testing.assert_allclose(filtered.sum(axis=1), np.ones(5), atol=1e-8)
+    # start_prob pins state 0 at t=0 and the transition matrix never lets state 1
+    # become reachable, so it must stay exactly 0 at every step.
+    np.testing.assert_allclose(filtered[:, 1], np.zeros(5), atol=1e-8)
+
+
+def test_preview_posterior_rows_sum_to_one_with_1d_prev_alpha() -> None:
+    observations = _sample_observations(n_timesteps=10, seed=11)
+    prev_alpha = np.array([0.3, 0.7])
+
+    preview = preview_posterior(prev_alpha, TRANSITION_MATRIX, observations, MEANS, VARIANCES)
+
+    assert preview.shape == (10, 2)
+    np.testing.assert_allclose(preview.sum(axis=1), np.ones(10), atol=1e-8)
+
+
+def test_preview_posterior_rows_sum_to_one_with_2d_prev_alpha() -> None:
+    observations = _sample_observations(n_timesteps=4, seed=12)
+    prev_alpha = np.array([[0.3, 0.7], [0.5, 0.5], [0.9, 0.1], [0.1, 0.9]])
+
+    preview = preview_posterior(prev_alpha, TRANSITION_MATRIX, observations, MEANS, VARIANCES)
+
+    assert preview.shape == (4, 2)
+    np.testing.assert_allclose(preview.sum(axis=1), np.ones(4), atol=1e-8)
+
+
+def test_preview_posterior_equals_one_step_of_filtered_posterior() -> None:
+    """The whole point of `preview_posterior`: given the filtered posterior at
+    step 0, previewing step 1's observation must reproduce exactly what
+    `filtered_posterior` would compute as its second row for the two-observation
+    sequence [obs_0, obs_1] — same recursion step, just factored out.
+    """
+    observations = _sample_observations(n_timesteps=2, seed=13)
+
+    full = filtered_posterior(observations, START_PROB, TRANSITION_MATRIX, MEANS, VARIANCES)
+    alpha_0 = full[0]
+
+    preview = preview_posterior(alpha_0, TRANSITION_MATRIX, observations[1:2], MEANS, VARIANCES)
+
+    np.testing.assert_allclose(preview[0], full[1], atol=1e-8)
+
+
+def test_preview_posterior_broadcasts_same_anchor_to_every_observation() -> None:
+    """A 1-D `prev_alpha` must behave exactly like repeating that same anchor row
+    for every observation — this is what lets `predict.py` preview every day of a
+    month from one shared month-end anchor in a single batched call.
+    """
+    observations = _sample_observations(n_timesteps=3, seed=14)
+    anchor = np.array([0.4, 0.6])
+
+    broadcast = preview_posterior(anchor, TRANSITION_MATRIX, observations, MEANS, VARIANCES)
+    repeated = preview_posterior(
+        np.tile(anchor, (3, 1)), TRANSITION_MATRIX, observations, MEANS, VARIANCES
+    )
+
+    np.testing.assert_allclose(broadcast, repeated, atol=1e-8)
+
+
+def test_preview_posterior_handles_zero_transition_probabilities_without_nan() -> None:
+    """A fitted HMM can legitimately have an exact-zero transition probability —
+    log(0) = -inf is correct, not a bug (same reasoning as `filtered_posterior`'s
+    own start_prob/transition handling)."""
+    degenerate_transition = np.array([[1.0, 0.0], [0.0, 1.0]])
+    observations = _sample_observations(n_timesteps=5, seed=15)
+    anchor = np.array([1.0, 0.0])
+
+    preview = preview_posterior(anchor, degenerate_transition, observations, MEANS, VARIANCES)
+
+    assert not np.any(np.isnan(preview))
+    np.testing.assert_allclose(preview.sum(axis=1), np.ones(5), atol=1e-8)
+
+
+def test_preview_posterior_handles_extreme_anchor_without_nan() -> None:
+    """An anchor that is itself exactly degenerate (probability 1 on one state)
+    must not blow up log(0) handling."""
+    observations = _sample_observations(n_timesteps=5, seed=16)
+    anchor = np.array([1.0, 0.0])
+
+    preview = preview_posterior(anchor, TRANSITION_MATRIX, observations, MEANS, VARIANCES)
+
+    assert not np.any(np.isnan(preview))
+    np.testing.assert_allclose(preview.sum(axis=1), np.ones(5), atol=1e-8)

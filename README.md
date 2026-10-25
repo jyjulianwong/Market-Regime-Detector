@@ -364,7 +364,7 @@ aws ecr get-login-password --region eu-west-2 | \
 | Time (UTC) | Event |
 |---|---|
 | 05:00, Sun | `ingest` EventBridge Rule invokes the batch Lambda with `{"action": "ingest"}` — incrementally ingests every first-pass series into the lake |
-| 06:30, Mon–Fri | `predict` EventBridge Rule invokes the batch Lambda with `{"action": "predict"}` — loads the production model, runs the causal forward filter against whatever's already in the lake (no ingestion), writes `predictions/model_id=<id>/{latest,history}.json` and a write-once `snapshots/asof=<date>.json` |
+| 06:30, Mon–Fri | `predict` EventBridge Rule invokes the batch Lambda with `{"action": "predict"}` — loads the production model, runs the real recursive causal forward filter over month-end rows only, previews every other day in the lookback window with one `preview_posterior` step off its month's previous month-end (never a daily recursion — see `prediction/predict.py`'s `_axis_posteriors`), writes `predictions/model_id=<id>/{latest,history}.json` and a write-once `snapshots/asof=<date>.json` |
 | Any time | `GET /v1/predictions/latest` (and `/history`) on the Server Lambda Function URL serve whatever the last `predict` run wrote |
 | On failure | EventBridge retries, then the message lands in the shared SQS DLQ; a CloudWatch alarm on the batch Lambda's `Errors` metric emails `alert_email` |
 

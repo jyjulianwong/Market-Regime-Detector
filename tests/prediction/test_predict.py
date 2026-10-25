@@ -8,7 +8,6 @@ import boto3
 import numpy as np
 import pandas as pd
 import pytest
-from hmmlearn.hmm import GaussianHMM
 from moto import mock_aws
 from mypy_boto3_dynamodb.client import DynamoDBClient
 from mypy_boto3_s3.client import S3Client
@@ -19,10 +18,14 @@ from market_regime_detector.common.feature_config import (
     FeatureDefinition,
     Frequency,
 )
-from market_regime_detector.common.forward_filter import filtered_posterior
+from market_regime_detector.common.forward_filter import filtered_posterior, preview_posterior
 from market_regime_detector.common.model_registry import promote_model, put_model_item
 from market_regime_detector.ingestion.lake import write_to_lake
-from market_regime_detector.prediction.predict import _fetch_raw_series, run_prediction
+from market_regime_detector.prediction.predict import (
+    PredictionResult,
+    _fetch_raw_series,
+    run_prediction,
+)
 
 BUCKET = "test-bucket"
 TABLE_NAME = "test-registry"
@@ -68,12 +71,17 @@ def aws() -> Generator[tuple[S3Client, DynamoDBClient], None, None]:
 
 
 def _feature_config() -> FeatureConfig:
+    # DAILY (not MONTHLY) native frequency, matching every real first-pass market
+    # feature (e.g. T10Y2Y) — this is what routes `build_feature_value` through the
+    # actual resample("ME") + latest_value pipeline `_axis_posteriors`'s month-end
+    # vs. daily-preview split depends on, rather than the plain as-of lookup a
+    # MONTHLY-declared feature would use regardless of calendar month boundaries.
     growth = FeatureDefinition(
         name="growth_f1",
         axis=Axis.GROWTH,
         series_id="GROWTH_SERIES",
         source="fred",
-        native_frequency=Frequency.MONTHLY,
+        native_frequency=Frequency.DAILY,
         vintage_aware=False,
         publication_lag_days=0,
         transform="identity",
@@ -85,7 +93,7 @@ def _feature_config() -> FeatureConfig:
         axis=Axis.INFLATION,
         series_id="INFLATION_SERIES",
         source="fred",
-        native_frequency=Frequency.MONTHLY,
+        native_frequency=Frequency.DAILY,
         vintage_aware=False,
         publication_lag_days=0,
         transform="identity",
@@ -93,17 +101,6 @@ def _feature_config() -> FeatureConfig:
         sign=1,
     )
     return FeatureConfig(version="test", features=(growth, inflation))
-
-
-def _sample_observations(means: np.ndarray, seed: int, n: int) -> np.ndarray:
-    model = GaussianHMM(n_components=2, covariance_type="diag", random_state=seed)
-    model.startprob_ = START_PROB
-    model.transmat_ = TRANSITION_MATRIX
-    model.means_ = means
-    model.covars_ = VARIANCES
-    observations, _states = model.sample(n)
-    result: np.ndarray = observations[:, 0]
-    return result
 
 
 def _put_npz(s3: S3Client, key: str, **arrays: np.ndarray) -> None:
@@ -188,50 +185,143 @@ def _publish_and_promote(dynamodb: DynamoDBClient) -> None:
     promote_model(dynamodb, TABLE_NAME, MODEL_ID)
 
 
-def test_run_prediction_matches_forward_filter_directly(
-    aws: tuple[S3Client, DynamoDBClient],
-) -> None:
-    s3, dynamodb = aws
-    n_days = 20
-    dates = pd.date_range("2024-01-01", periods=n_days, freq="D")
-    date_strs = [d.strftime("%Y-%m-%d") for d in dates]
+# One raw observation per calendar month, dated the 1st — with DAILY native
+# frequency + transform="identity", that single point becomes the whole month's
+# feature value from day 1 onward (nothing else arrives that month), so every test
+# below knows exactly what `_axis_posteriors` should see at any day in any month
+# without needing to reverse-engineer pandas' resample behaviour by hand.
+MONTHLY_TEST_DATES = ["2023-11-01", "2023-12-01", "2024-01-01", "2024-02-01"]
+GROWTH_MONTHLY_VALUES = [-1.0, 1.0, -0.5, 1.5]
+INFLATION_MONTHLY_VALUES = [-2.0, 2.0, 0.0, 1.0]
+# Index into the arrays above / into `filtered_posterior`'s output: 0=Nov, 1=Dec,
+# 2=Jan, 3=Feb.
 
-    growth_obs = _sample_observations(GROWTH_MEANS, seed=1, n=n_days)
-    inflation_obs = _sample_observations(INFLATION_MEANS, seed=2, n=n_days)
 
-    _write_lake_series(s3, "GROWTH_SERIES", date_strs, growth_obs.tolist())
-    _write_lake_series(s3, "INFLATION_SERIES", date_strs, inflation_obs.tolist())
+def _setup_monthly_fixture(s3: S3Client, dynamodb: DynamoDBClient) -> None:
+    _write_lake_series(s3, "GROWTH_SERIES", MONTHLY_TEST_DATES, GROWTH_MONTHLY_VALUES)
+    _write_lake_series(s3, "INFLATION_SERIES", MONTHLY_TEST_DATES, INFLATION_MONTHLY_VALUES)
     _publish_fake_model(s3)
     _publish_and_promote(dynamodb)
 
-    result = run_prediction(
+
+def _run_monthly_fixture_prediction(s3: S3Client, dynamodb: DynamoDBClient) -> PredictionResult:
+    return run_prediction(
         s3,
         dynamodb,
         BUCKET,
         TABLE_NAME,
-        start=date(2024, 1, 1),
-        end=date(2024, 1, 20),
-        asof=date(2024, 1, 20),
+        start=date(2023, 11, 1),
+        end=date(2024, 2, 29),
+        asof=date(2024, 2, 29),
     )
+
+
+def test_run_prediction_month_end_day_equals_monthly_filtered_posterior(
+    aws: tuple[S3Client, DynamoDBClient],
+) -> None:
+    """Issue A's fix, checked directly: at an exact month-end, the daily preview
+    must reproduce the real recursive monthly `filtered_posterior` exactly, because
+    it is the same recursion step, not an approximation of it."""
+    s3, dynamodb = aws
+    _setup_monthly_fixture(s3, dynamodb)
+
+    result = _run_monthly_fixture_prediction(s3, dynamodb)
 
     expected_growth = filtered_posterior(
-        growth_obs.reshape(-1, 1), START_PROB, TRANSITION_MATRIX, GROWTH_MEANS, VARIANCES
+        np.array(GROWTH_MONTHLY_VALUES).reshape(-1, 1),
+        START_PROB,
+        TRANSITION_MATRIX,
+        GROWTH_MEANS,
+        VARIANCES,
     )
     expected_inflation = filtered_posterior(
-        inflation_obs.reshape(-1, 1), START_PROB, TRANSITION_MATRIX, INFLATION_MEANS, VARIANCES
+        np.array(INFLATION_MONTHLY_VALUES).reshape(-1, 1),
+        START_PROB,
+        TRANSITION_MATRIX,
+        INFLATION_MEANS,
+        VARIANCES,
     )
 
-    np.testing.assert_allclose(
-        result.history["p_growth_up"].to_numpy(), expected_growth[:, 1], atol=1e-8
+    for month_end, month_idx in (
+        (pd.Timestamp("2023-12-31"), 1),
+        (pd.Timestamp("2024-01-31"), 2),
+        (pd.Timestamp("2024-02-29"), 3),
+    ):
+        assert result.history.loc[month_end, "p_growth_up"] == pytest.approx(
+            expected_growth[month_idx, 1], abs=1e-8
+        )
+        assert result.history.loc[month_end, "p_inflation_up"] == pytest.approx(
+            expected_inflation[month_idx, 1], abs=1e-8
+        )
+
+
+def test_run_prediction_mid_month_day_equals_preview_posterior_from_anchor(
+    aws: tuple[S3Client, DynamoDBClient],
+) -> None:
+    """A mid-month day must equal exactly one `preview_posterior` step off the
+    *previous* month's filtered posterior — never a recursive daily filter fed
+    that day's (and every other day's) feature value."""
+    s3, dynamodb = aws
+    _setup_monthly_fixture(s3, dynamodb)
+
+    result = _run_monthly_fixture_prediction(s3, dynamodb)
+
+    expected_growth_monthly = filtered_posterior(
+        np.array(GROWTH_MONTHLY_VALUES).reshape(-1, 1),
+        START_PROB,
+        TRANSITION_MATRIX,
+        GROWTH_MEANS,
+        VARIANCES,
     )
-    np.testing.assert_allclose(
-        result.history["p_inflation_up"].to_numpy(), expected_inflation[:, 1], atol=1e-8
+    december_anchor = expected_growth_monthly[1]
+    expected_mid_january = preview_posterior(
+        december_anchor,
+        TRANSITION_MATRIX,
+        np.array([[GROWTH_MONTHLY_VALUES[2]]]),
+        GROWTH_MEANS,
+        VARIANCES,
     )
-    assert result.model_id == MODEL_ID
-    assert result.dataset_id == "ds-test"
-    assert result.observation_date == date(2024, 1, 20)
-    assert not result.is_stale
-    assert result.warnings == []
+
+    actual = result.history.loc[pd.Timestamp("2024-01-15"), "p_growth_up"]
+    assert actual == pytest.approx(expected_mid_january[0, 1], abs=1e-8)
+
+
+def test_run_prediction_constant_within_month_feature_does_not_drift(
+    aws: tuple[S3Client, DynamoDBClient],
+) -> None:
+    """Regression test for the original bug: running ~30 identical daily
+    observations through a recursive `filtered_posterior` used to saturate the
+    posterior toward whichever state that single observation favoured, more so
+    the deeper into the month you looked. With the monthly-anchor + one-step daily
+    preview design, every day in the same month previews off the same anchor with
+    the same feature value, so two different days in that month must come out
+    exactly equal — not just close, and never drifting apart."""
+    s3, dynamodb = aws
+    _setup_monthly_fixture(s3, dynamodb)
+
+    result = _run_monthly_fixture_prediction(s3, dynamodb)
+
+    early = result.history.loc[pd.Timestamp("2024-01-05")]
+    late = result.history.loc[pd.Timestamp("2024-01-25")]
+
+    assert early["p_growth_up"] == pytest.approx(late["p_growth_up"], abs=1e-12)
+    assert early["p_inflation_up"] == pytest.approx(late["p_inflation_up"], abs=1e-12)
+
+
+def test_run_prediction_drops_days_with_no_prior_month_end_anchor(
+    aws: tuple[S3Client, DynamoDBClient],
+) -> None:
+    """The lookback window's first (partial) month has no completed prior
+    month-end to anchor off, so its days must be silently dropped — never chained
+    to some earlier, nonexistent anchor."""
+    s3, dynamodb = aws
+    _setup_monthly_fixture(s3, dynamodb)
+
+    result = _run_monthly_fixture_prediction(s3, dynamodb)
+
+    assert result.history.index.min() == pd.Timestamp("2023-12-01")
+    assert pd.Timestamp("2023-11-30") not in result.history.index
+    assert pd.Timestamp("2023-11-15") not in result.history.index
 
 
 def test_run_prediction_defaults_to_production_model(
