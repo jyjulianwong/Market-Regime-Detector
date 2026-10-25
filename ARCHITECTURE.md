@@ -24,6 +24,7 @@ flowchart LR
         S_PUB["scripts/publish_model.py"]
         S_PROM["scripts/promote_model.py"]
         S_PRED["scripts/run_prediction.py"]
+        S_EVAL["scripts/evaluate_model.py"]
     end
 
     subgraph batch["Batch Lambda<br/>no hmmlearn"]
@@ -44,6 +45,7 @@ flowchart LR
     S_TRAIN --> TRAINING
     S_PUB --> TRAINING
     S_PROM --> TRAINING
+    S_EVAL --> TRAINING
     S_PRED --> PREDICTION
     H --> INGESTION
     H --> PREDICTION
@@ -175,6 +177,7 @@ classDiagram
     class forward_filter {
         <<module forward_filter.py>>
         filtered_posterior(X, start_prob, transmat, means, vars)
+        preview_posterior(prev_alpha, transmat, X, means, vars)
     }
     class quadrants {
         <<module quadrants.py>>
@@ -238,6 +241,7 @@ classDiagram
     class series_catalog {
         <<module series_catalog.py>>
         FIRST_PASS_SERIES : list~SeriesSpec~
+        EVALUATION_SERIES : CFNAIMA3, CPIAUCSL, USREC
     }
 
     class ingest {
@@ -347,6 +351,43 @@ classDiagram
         episode_report(quadrants, value_column)
         render_model_card(...)
     }
+    class LabelSet {
+        <<dataclass frozen>>
+        growth
+        growth_recession
+        inflation
+        label_lag_months
+    }
+    class labels {
+        <<module labels.py>>
+        growth_label(cfnai_ma3)
+        recession_label(usrec)
+        inflation_label(cpi)
+        build_label_set(cfnai, usrec, cpi) LabelSet
+    }
+    class benchmarks {
+        <<module benchmarks.py>>
+        climatology_baseline(...)
+        calibrated_persistence_baseline(...)
+        fixed_rule_baseline(...)
+        logistic_baseline(...)
+    }
+    class scoring {
+        <<module scoring.py>>
+        log_loss / brier / skill_score
+        auc / accuracy
+        calibration_table
+        block_bootstrap_ci
+        flip_rate_per_year
+        mean_regime_duration_months
+        detection_lag
+    }
+    class harness {
+        <<module harness.py>>
+        MODEL_NAMES
+        run_evaluation(growth_df, inflation_df, labels, feature_config, hp, dev_end, include_holdout) dict
+        render_evaluation_markdown(report, metadata) str
+    }
     class publisher {
         <<module publisher.py>>
         PublishStage
@@ -358,6 +399,12 @@ classDiagram
     }
 
     dataset --> DatasetResult
+    labels --> LabelSet
+    harness --> LabelSet
+    harness --> benchmarks : 4 causal baselines
+    harness --> scoring
+    harness --> evaluation : HMM walk-forward
+    harness --> build_model : HMMHyperparameters
     build_model --> HMMHyperparameters
     build_model --> trainer : fit_hmm (full history, saved)
     build_model --> evaluation : walk_forward_evaluate (diagnostic only)
@@ -441,6 +488,7 @@ classDiagram
         <<module predict.py>>
         DEFAULT_LOOKBACK_DAYS = 730
         run_prediction(s3, ddb, bucket, table, model_id, source, start, end, asof) PredictionResult
+        _axis_posteriors() monthly filter + daily preview
     }
     class outputs {
         <<module outputs.py>>
@@ -458,7 +506,7 @@ classDiagram
     ModelArtifact "1" *-- "2" HMMArtifact
     predict ..> common_registry : get_model / get_production_model
     predict ..> common_features : build_feature_value
-    predict ..> forward_filter : filtered_posterior
+    predict ..> forward_filter : filtered_posterior (month-ends), preview_posterior (days)
     predict ..> quadrants : quadrant_probabilities
     predict ..> lake_read : read_series (source=lake)
     predict ..> provider_factory : build_provider (source=live)
@@ -579,6 +627,7 @@ flowchart TB
         DS["build_dataset()<br/>point-in-time features, monthly"]
         FIT["train_and_save_model()<br/>fit_hmm ×2, walk-forward, baseline"]
         PUB["publish_model()"]
+        EVAL["run_evaluation()<br/>HMM vs 4 baselines, scored on labels"]
     end
 
     LOCAL["Local model dir<br/>growth_hmm.npz · inflation_hmm.npz · scalers.npz<br/>labels.json · config.json · metrics.json · model_card.md"]
@@ -590,7 +639,7 @@ flowchart TB
     subgraph pred["Prediction — prediction/ (batch Lambda)"]
         LOAD["load_model_artifact()"]
         FEAT["daily features<br/>(same common/ code as training)"]
-        FILT["filtered_posterior()<br/>causal NumPy forward filter"]
+        FILT["filtered_posterior() on month-ends<br/>+ preview_posterior() per day<br/>causal NumPy forward filter"]
         QUAD["quadrant_probabilities()"]
         OUT["write_prediction_outputs()"]
     end
@@ -602,13 +651,19 @@ flowchart TB
     end
     CLIENT["client/index.html<br/>(GitHub Pages)"]
 
+    LABELS["Evaluation-only series<br/>CFNAIMA3, CPIAUCSL, USREC<br/>(manual ingest, never a feature)"]
+    FRED --> LABELS
     FRED --> PROV
     ALFRED --> PROV
     YF --> PROV
     AV --> PROV
     PROV --> VAL --> WRITE --> LAKE
 
+    LABELS -. "scripts/ingest_data.py --series" .-> LAKE
     LAKE --> DS --> FIT --> LOCAL --> PUB
+    DS --> EVAL
+    LAKE --> EVAL
+    EVAL --> EVALOUT["evaluation.json / evaluation.md<br/>(local files)"]
     PUB --> MODELS
     PUB --> MANI
     PUB --> REG
@@ -668,6 +723,10 @@ sequenceDiagram
     end
 ```
 
+The weekly job iterates `FIRST_PASS_SERIES` only. The three `EVALUATION_SERIES`
+(ground-truth labels for scoring) are ingested by hand with
+`scripts/ingest_data.py --series CFNAIMA3 CPIAUCSL USREC` and are never used as model features.
+
 The 30-day overlap re-fetches a trailing window so recent revisions are picked up; the
 dedupe key keeps the newest `ingested_at`, so re-running any range is idempotent.
 
@@ -716,6 +775,13 @@ sequenceDiagram
     PR-->>PR: invoke_batch_lambda_best_effort(model_id)
 ```
 
+Separately, `scripts/evaluate_model.py` measures the current configuration without
+changing it: it builds the same dataset, reads the label series from the lake
+(`build_label_set`), and calls `run_evaluation`, which scores the HMM's walk-forward
+posteriors against four causal baselines (climatology, calibrated persistence, fixed
+rule, logistic) on dev/holdout splits. It writes `evaluation.json` and `evaluation.md`
+locally and publishes nothing.
+
 Only the full-history fit is saved; the walk-forward fits exist to produce honest
 out-of-sample metrics in `metrics.json` and `model_card.md`.
 
@@ -743,9 +809,9 @@ sequenceDiagram
     ML-->>RP: ModelArtifact (no pickle)
     RP->>S3: read_series() for each series in feature_config
     Note over RP: Per series: stale if latest realtime_start is older<br/>than its frequency tolerance (3d / 10d / 40d)
-    RP->>RP: daily build_feature_value() for growth + inflation<br/>(last 730 days)
-    RP->>RP: standardize → filtered_posterior() per axis →<br/>p_growth_up, p_inflation_up
-    RP->>RP: quadrant_probabilities(), argmax → regime + confidence
+    RP->>RP: build_feature_value() at month-ends and for every day<br/>(last 730 days), growth + inflation
+    RP->>RP: _axis_posteriors(): filtered_posterior() over month-ends,<br/>then one preview_posterior() step per day off the<br/>previous month-end's posterior (no daily recursion)
+    RP->>RP: p_growth_up, p_inflation_up → quadrant_probabilities(), argmax → regime + confidence
     RP-->>H: PredictionResult
     H->>OUT: write_prediction_outputs()
     OUT->>S3: predictions/model_id=ID/latest.json (overwrite)
@@ -789,12 +855,13 @@ One versioned S3 bucket (`Settings.s3_bucket_name`) plus one DynamoDB table.
 | Change point-in-time / publication-lag logic | `common/pit.py`, `common/features.py` |
 | Change HMM fitting or its sanity checks | `training/trainer.py` (`fit_hmm`), hyperparameters in `training/build_model.py` |
 | Change evaluation / model card | `training/evaluation.py`, `training/baseline.py`, `training/report.py` |
-| Change how inference works | `common/forward_filter.py`, `prediction/predict.py` |
+| Change how inference works | `common/forward_filter.py` (`filtered_posterior`, `preview_posterior`), `prediction/predict.py` (`_axis_posteriors`) |
+| Score a model against baselines | `scripts/evaluate_model.py` → `training/harness.py`, `benchmarks.py`, `scoring.py`, `labels.py`; label series in `ingestion/series_catalog.py` (`EVALUATION_SERIES`) |
 | Change the published JSON shape | `prediction/outputs.py` **and** `server/schemas.py` (keep in sync) |
 | Add an API endpoint | `server/routes.py`, `server/schemas.py`, `server/reads.py` |
 | Change schedules, IAM, Lambdas | `terraform/main.tf`, `docker/batch-lambda.Dockerfile`, `scripts/package_lambda.sh` |
 | Change CI/CD | `.github/workflows/deploy-terraform.yml`, `deploy-client.yml` |
-| Run something by hand | `scripts/` — `ingest_data.py`, `train_model.py`, `publish_model.py`, `promote_model.py`, `run_prediction.py` (thin wrappers, no logic of their own) |
+| Run something by hand | `scripts/` — `ingest_data.py`, `train_model.py`, `evaluate_model.py`, `publish_model.py`, `promote_model.py`, `run_prediction.py` (thin wrappers, no logic of their own) |
 
 Tests mirror the source tree: `tests/common`, `tests/ingestion` (+ `providers/`),
 `tests/training`, `tests/prediction`, `tests/server`.
