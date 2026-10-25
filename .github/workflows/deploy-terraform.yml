@@ -84,11 +84,15 @@ jobs:
       - name: Post plan to PR
         uses: actions/github-script@v7
         if: always()
+        env:
+          # Passed via env, never interpolated into the script: a plan's newlines and
+          # quotes would otherwise break the JavaScript string literal.
+          PLAN_OUTPUT: ${{ steps.terraform-plan.outputs.stdout }}
         with:
           script: |
-            const planOutput = '${{ steps.terraform-plan.outputs.stdout }}'.slice(0, 60000);
+            const planOutput = (process.env.PLAN_OUTPUT || '').slice(0, 60000);
             const body = `### Terraform Plan\n\`\`\`\n${planOutput}\n\`\`\``;
-            github.rest.issues.createComment({
+            await github.rest.issues.createComment({
               issue_number: context.issue.number,
               owner: context.repo.owner,
               repo: context.repo.repo,
