@@ -2,9 +2,20 @@ import numpy as np
 
 
 def _logsumexp(a: np.ndarray, axis: int) -> np.ndarray:
-    """A minimal `logsumexp` — avoids adding scipy as a dependency for one function."""
+    """A minimal `logsumexp` — avoids adding scipy as a dependency for one function.
+
+    A real bug, caught by `preview_posterior`'s zero-transition-probability test,
+    not a hypothetical: when every value along `axis` is `-inf` (a genuinely
+    impossible outcome — e.g. a state with zero probability of being reached from
+    any predecessor), `a_max` is itself `-inf`, and `a - a_max` becomes `-inf -
+    (-inf) = nan` under IEEE arithmetic, poisoning the result that should just be
+    `-inf`. `safe_max` substitutes a finite placeholder for that subtraction only;
+    the real (possibly `-inf`) `a_max` is still what gets added back below, so an
+    all-impossible row correctly comes out `-inf`, not `nan`.
+    """
     a_max = np.max(a, axis=axis, keepdims=True)
-    result = a_max + np.log(np.sum(np.exp(a - a_max), axis=axis, keepdims=True))
+    safe_max = np.where(np.isneginf(a_max), 0.0, a_max)
+    result = a_max + np.log(np.sum(np.exp(a - safe_max), axis=axis, keepdims=True))
     squeezed: np.ndarray = np.squeeze(result, axis=axis)
     return squeezed
 
@@ -69,3 +80,58 @@ def filtered_posterior(
         log_alpha[t] -= _logsumexp(log_alpha[t], axis=0)
 
     return np.exp(log_alpha)
+
+
+def preview_posterior(
+    prev_alpha: np.ndarray,
+    transition_matrix: np.ndarray,
+    observations: np.ndarray,
+    means: np.ndarray,
+    variances: np.ndarray,
+) -> np.ndarray:
+    """One forward-filter step applied independently to each row of `observations`,
+    from a fixed prior `prev_alpha` — never recursed across rows.
+
+    Used by `prediction/predict.py` to turn a monthly filtered posterior into a
+    daily preview: every day in month `M` previews `P(state | month M-1's filtered
+    posterior, that day's own partial-month features)`, so the transition matrix
+    (learned on monthly steps) is applied exactly once per calendar month no matter
+    how many daily rows are requested for that month — unlike feeding ~30
+    near-identical daily observations through `filtered_posterior` directly, which
+    applies a month's worth of transition probability per day.
+
+    When `observations` is the single month-end row that produces `prev_alpha`'s
+    successor under `filtered_posterior`, this returns exactly that successor row —
+    it is the same recursion step, just factored out so it can be evaluated against
+    many candidate observations (a month's worth of days) without feeding any of
+    them back into each other.
+
+    Args:
+        prev_alpha: `(n_states,)` (broadcast to every observation row) or `(N,
+            n_states)` (one anchor row per observation).
+        transition_matrix: `(n_states, n_states)`.
+        observations: `(N, n_features)`, already standardized.
+        means: `(n_states, n_features)`.
+        variances: `(n_states, n_features)` — diagonal covariance only.
+
+    Returns:
+        `(N, n_states)`, each row summing to 1.
+    """
+    log_emission = _log_gaussian_diag(observations, means, variances)
+    n_observations, n_states = log_emission.shape
+
+    prev_alpha = np.asarray(prev_alpha, dtype=float)
+    if prev_alpha.ndim == 1:
+        prev_alpha = np.broadcast_to(prev_alpha, (n_observations, n_states))
+
+    # Same log(0) = -inf reasoning as `filtered_posterior` above.
+    with np.errstate(divide="ignore"):
+        log_prev_alpha = np.log(prev_alpha)
+        log_transition = np.log(transition_matrix)
+        predicted = log_prev_alpha[:, :, None] + log_transition[None, :, :]
+        log_predicted = _logsumexp(predicted, axis=1)
+        log_posterior = log_predicted + log_emission
+        log_posterior -= _logsumexp(log_posterior, axis=1)[:, None]
+
+    result: np.ndarray = np.exp(log_posterior)
+    return result

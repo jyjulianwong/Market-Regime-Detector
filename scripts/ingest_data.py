@@ -5,6 +5,7 @@ Usage:
     uv run python scripts/ingest_data.py --start 2015-01-01 --end 2026-10-16
     uv run python scripts/ingest_data.py --incremental
     uv run python scripts/ingest_data.py --series INDPRO PAYEMS --start 2020-01-01 --end 2024-01-01
+    uv run python scripts/ingest_data.py --series CFNAIMA3 CPIAUCSL USREC --start 1990-01-01
 
 A thin wrapper around `market_regime_detector.ingestion.ingest` — no logic of its own.
 """
@@ -16,7 +17,7 @@ from datetime import date
 from market_regime_detector.common.logging import configure_logging
 from market_regime_detector.common.settings import get_settings
 from market_regime_detector.ingestion.ingest import ingest_incremental, ingest_series
-from market_regime_detector.ingestion.series_catalog import FIRST_PASS_SERIES
+from market_regime_detector.ingestion.series_catalog import EVALUATION_SERIES, FIRST_PASS_SERIES
 
 logger = logging.getLogger(__name__)
 
@@ -27,8 +28,10 @@ def _parse_args() -> argparse.Namespace:
         "--series",
         nargs="+",
         default=None,
-        help="Series IDs to ingest (must exist in series_catalog.py). Defaults to all "
-        "first-pass series.",
+        help="Series IDs to ingest (must exist in series_catalog.py's FIRST_PASS_SERIES or "
+        "EVALUATION_SERIES). Defaults to all first-pass series — evaluation-only series "
+        "(CFNAIMA3, CPIAUCSL, USREC) are never ingested by default, only when named "
+        "explicitly, since the weekly production ingest never needs them.",
     )
     parser.add_argument(
         "--start",
@@ -63,12 +66,21 @@ def main() -> None:
     configure_logging(settings.log_level)
     args = _parse_args()
 
-    catalog = {spec.series_id: spec for spec in FIRST_PASS_SERIES}
-    series_ids: list[str] = args.series if args.series is not None else list(catalog)
+    # The default (no --series) stays FIRST_PASS_SERIES only — EVALUATION_SERIES is
+    # reachable only by naming it explicitly, so a plain `ingest_data.py --start ...`
+    # run (what the weekly production schedule's intent mirrors locally) never
+    # pulls in ground-truth label series it has no use for.
+    catalog = {spec.series_id: spec for spec in FIRST_PASS_SERIES + EVALUATION_SERIES}
+    series_ids: list[str] = (
+        args.series if args.series is not None else [spec.series_id for spec in FIRST_PASS_SERIES]
+    )
 
     for series_id in series_ids:
         if series_id not in catalog:
-            raise ValueError(f"{series_id!r} is not in series_catalog.FIRST_PASS_SERIES")
+            raise ValueError(
+                f"{series_id!r} is not in series_catalog.FIRST_PASS_SERIES or "
+                "series_catalog.EVALUATION_SERIES"
+            )
         spec = catalog[series_id]
 
         logger.info("ingesting %s from %s", series_id, spec.source)
