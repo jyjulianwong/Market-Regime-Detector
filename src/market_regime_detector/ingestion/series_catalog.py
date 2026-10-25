@@ -23,3 +23,15 @@ FIRST_PASS_SERIES = [
     SeriesSpec("DFII10", "fred", "inflation"),
     SeriesSpec("DCOILWTICO", "fred", "inflation"),
 ]
+
+# Evaluation-only: ground-truth label inputs for `training/labels.py`'s scoring
+# harness, never fed to a model as a feature (that would be circular — these are
+# "what actually happened," not point-in-time-knowable signal). Deliberately NOT
+# in FIRST_PASS_SERIES — the weekly ingest Lambda (`prediction/handler.py`)
+# iterates FIRST_PASS_SERIES directly, not this catalog module as a whole, and
+# must not fetch these as part of that production schedule.
+EVALUATION_SERIES = [
+    SeriesSpec("CFNAIMA3", "fred", "growth"),  # Chicago Fed National Activity Index, 3-mo avg
+    SeriesSpec("CPIAUCSL", "fred", "inflation"),  # headline CPI, SA
+    SeriesSpec("USREC", "fred", "growth"),  # NBER recession indicator (0/1), monthly
+]
