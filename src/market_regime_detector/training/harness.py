@@ -73,6 +73,8 @@ def _axis_model_series(
         min_state_duration_months=hp.min_state_duration_months,
         composite_separation_margin=hp.composite_separation_margin,
         random_state=hp.random_state,
+        scaler_clip=hp.scaler_clip,
+        scaler_method=hp.scaler_method,
     )
     logistic_result = logistic_baseline(
         axis_df,
@@ -81,6 +83,8 @@ def _axis_model_series(
         label_lag_months,
         initial_window_months=hp.initial_window_months,
         refit_every_months=hp.refit_every_months,
+        scaler_clip=hp.scaler_clip,
+        scaler_method=hp.scaler_method,
     )
 
     month_end_index = pd.DatetimeIndex(axis_df.index)

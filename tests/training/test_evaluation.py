@@ -3,6 +3,7 @@ import pandas as pd
 
 from market_regime_detector.common.feature_config import Axis, FeatureDefinition, Frequency
 from market_regime_detector.common.forward_filter import filtered_posterior
+from market_regime_detector.common.scaling import apply_scaler
 from market_regime_detector.training.evaluation import walk_forward_evaluate
 from market_regime_detector.training.trainer import fit_hmm
 
@@ -86,8 +87,11 @@ def test_walk_forward_evaluate_filter_carries_memory_across_fold_boundary() -> N
     # over history + test window must match the returned rows, not a test-only restart.
     fold0 = result[result["fold_id"] == 0]
     fit_result = fit_hmm(df.iloc[:60], FEATURE_DEFS, random_state=0)
-    scaled = (df.iloc[:72][fit_result.feature_names].to_numpy() - fit_result.scaler_mean) / (
-        fit_result.scaler_scale
+    scaled = apply_scaler(
+        df.iloc[:72][fit_result.feature_names].to_numpy(),
+        fit_result.scaler_mean,
+        fit_result.scaler_scale,
+        fit_result.scaler_clip,
     )
     args = (
         fit_result.start_prob,

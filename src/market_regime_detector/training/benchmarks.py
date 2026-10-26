@@ -3,9 +3,9 @@ import logging
 import numpy as np
 import pandas as pd
 from sklearn.linear_model import LogisticRegression
-from sklearn.preprocessing import StandardScaler
 
 from market_regime_detector.common.feature_config import FeatureDefinition
+from market_regime_detector.common.scaling import DEFAULT_CLIP, apply_scaler, fit_robust_scaler
 
 logger = logging.getLogger(__name__)
 
@@ -113,10 +113,15 @@ def logistic_baseline(
     *,
     initial_window_months: int = 60,
     refit_every_months: int = 12,
+    scaler_clip: float = DEFAULT_CLIP,
+    scaler_method: str = "median_mad",
 ) -> pd.DataFrame:
     """Walk-forward `sklearn.linear_model.LogisticRegression` (L2, `C=1.0`) on the
-    same axis features, standardized with a scaler fit on each fold's own training
-    rows — the *same* fold boundaries as
+    same axis features, standardized with the *same* `common.scaling` robust
+    scaler + clip as the HMM (`HMM_ACCURACY_PLAN.md` Phase 1 — a plain
+    `StandardScaler` here would make "agreement with the HMM" partly an artifact
+    of which model's scaling handled outliers better, not a fair comparison),
+    fit on each fold's own training rows — the *same* fold boundaries as
     `training/evaluation.walk_forward_evaluate`, so its predictions are directly
     comparable to the HMM's.
 
@@ -170,8 +175,8 @@ def logistic_baseline(
             continue
 
         train_X = axis_df.loc[train_labels.index, feature_names].to_numpy()
-        scaler = StandardScaler()
-        train_X_scaled = scaler.fit_transform(train_X)
+        center, scale = fit_robust_scaler(train_X, clip=scaler_clip, method=scaler_method)
+        train_X_scaled = apply_scaler(train_X, center, scale, scaler_clip)
 
         # penalty="l2" is sklearn's own default (and the one explicit `penalty=`
         # kwarg is deprecated since 1.8, slated for removal in 1.10) — omitted
@@ -179,7 +184,9 @@ def logistic_baseline(
         model = LogisticRegression(C=1.0)
         model.fit(train_X_scaled, train_labels.to_numpy())
 
-        test_X_scaled = scaler.transform(axis_df.loc[test_idx, feature_names].to_numpy())
+        test_X_scaled = apply_scaler(
+            axis_df.loc[test_idx, feature_names].to_numpy(), center, scale, scaler_clip
+        )
         up_column = list(model.classes_).index(1.0)
         p_up = model.predict_proba(test_X_scaled)[:, up_column]
 

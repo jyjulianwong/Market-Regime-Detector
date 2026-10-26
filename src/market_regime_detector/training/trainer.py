@@ -4,9 +4,9 @@ from typing import Literal
 import numpy as np
 import pandas as pd
 from hmmlearn.hmm import GaussianHMM
-from sklearn.preprocessing import StandardScaler
 
 from market_regime_detector.common.feature_config import FeatureDefinition
+from market_regime_detector.common.scaling import DEFAULT_CLIP, apply_scaler, fit_robust_scaler
 
 Label = Literal["UP", "DOWN"]
 
@@ -16,6 +16,8 @@ class FitResult:
     feature_names: list[str]
     scaler_mean: np.ndarray
     scaler_scale: np.ndarray
+    scaler_clip: float
+    scaler_method: str
     start_prob: np.ndarray
     transition_matrix: np.ndarray
     means: np.ndarray
@@ -63,6 +65,8 @@ def fit_hmm(
     min_state_duration_months: float = 2.0,
     composite_separation_margin: float = 0.1,
     random_state: int | None = None,
+    scaler_clip: float = DEFAULT_CLIP,
+    scaler_method: str = "median_mad",
 ) -> FitResult:
     """Fits a 2-state Gaussian HMM on `df` (one row per monthly decision date, one
     column per feature on a single axis) and applies brief section 2.3's
@@ -71,6 +75,13 @@ def fit_hmm(
     `covariance_type="diag"` is a judgment call (the brief only specifies
     `GaussianHMM(n_components=2)`) — the standard, stable default for a handful of
     features over a few hundred monthly points.
+
+    Standardizes with `common.scaling.fit_robust_scaler`/`apply_scaler`
+    (`HMM_ACCURACY_PLAN.md` Phase 1), not a plain `StandardScaler` — a training
+    window containing one outlier month (e.g. ICSA's March 2020 spike) no longer
+    inflates that feature's scale for every other row. `scaler_clip`/
+    `scaler_method` are recorded on the returned `FitResult` so every later
+    scoring/prediction call standardizes identically to how this fit did.
 
     Multiple random restarts; among restarts whose fit **passes both sanity checks**
     (composite separation > `composite_separation_margin`, both states' expected
@@ -81,8 +92,9 @@ def fit_hmm(
     feature_names = [f.name for f in feature_defs if f.name in df.columns]
     signs = np.array([f.sign for f in feature_defs if f.name in df.columns], dtype=float)
 
-    scaler = StandardScaler()
-    observations = scaler.fit_transform(df[feature_names].to_numpy())
+    raw = df[feature_names].to_numpy()
+    scaler_mean, scaler_scale = fit_robust_scaler(raw, clip=scaler_clip, method=scaler_method)
+    observations = apply_scaler(raw, scaler_mean, scaler_scale, clip=scaler_clip)
 
     rng = np.random.default_rng(random_state)
     best: FitResult | None = None
@@ -115,8 +127,10 @@ def fit_hmm(
 
         best = FitResult(
             feature_names=feature_names,
-            scaler_mean=scaler.mean_,
-            scaler_scale=scaler.scale_,
+            scaler_mean=scaler_mean,
+            scaler_scale=scaler_scale,
+            scaler_clip=scaler_clip,
+            scaler_method=scaler_method,
             start_prob=model.startprob_,
             transition_matrix=model.transmat_,
             means=model.means_,

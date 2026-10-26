@@ -81,3 +81,37 @@ def test_fit_hmm_result_includes_feature_names_in_order() -> None:
     assert result.variances.shape == (2, 2)
     assert result.transition_matrix.shape == (2, 2)
     assert result.start_prob.shape == (2,)
+
+
+def test_fit_hmm_result_records_scaler_clip_and_method() -> None:
+    df = _synthetic_two_regime_df()
+
+    result = fit_hmm(df, FEATURE_DEFS, random_state=0, scaler_clip=3.5, scaler_method="median_mad")
+
+    assert result.scaler_clip == 3.5
+    assert result.scaler_method == "median_mad"
+
+
+def test_fit_hmm_outlier_does_not_inflate_scale_or_dominate_a_state() -> None:
+    """HMM_ACCURACY_PLAN.md Phase 1 problem #1: a few ICSA-March-2020-style
+    outlier months must not (a) inflate the fitted scale for the whole training
+    window, or (b) get carved into their own isolated state. A plain
+    `StandardScaler` would do (a); this asserts the robust-scaled fit avoids it,
+    and that the outlier months still land inside one of only two states that
+    each span more than just those rows.
+    """
+    # 300 months so 2 outliers (~0.7%) sit below the 1st/99th-percentile
+    # winsorization cutoff, the same real-world shape as a few COVID-era prints
+    # among a few hundred months of training history.
+    df = _synthetic_two_regime_df(n_per_block=30, n_blocks=10)
+    outlier_rows = [20, 21]  # two months inside an otherwise well-behaved UP block
+    f1 = df["f1"].to_numpy()
+    f1[outlier_rows] = 500.0
+    df["f1"] = f1
+
+    result = fit_hmm(df, FEATURE_DEFS, random_state=0)
+
+    # f1's robust scale should stay close to the non-outlier population's true
+    # std (~1.6, pooled across the +-2.0 alternating means and 0.3 within-block
+    # noise) rather than being dragged into the hundreds by the two outliers.
+    assert result.scaler_scale[0] < 10.0

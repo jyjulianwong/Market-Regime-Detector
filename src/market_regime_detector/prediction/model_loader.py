@@ -40,8 +40,10 @@ class ModelArtifact:
     inflation: HMMArtifact
     growth_scaler_mean: np.ndarray
     growth_scaler_scale: np.ndarray
+    growth_scaler_clip: float
     inflation_scaler_mean: np.ndarray
     inflation_scaler_scale: np.ndarray
+    inflation_scaler_clip: float
     feature_config: FeatureConfig
 
 
@@ -69,6 +71,12 @@ def load_model_artifact(s3: "S3Client", bucket: str, model_id: str) -> ModelArti
     """Reads the six files `training/publisher.py` uploaded to
     `models/<model_id>/` and reconstructs everything inference needs — no pickle,
     per brief section 2.7.
+
+    `growth_clip`/`inflation_clip` were added to `scalers.npz` by
+    `HMM_ACCURACY_PLAN.md` Phase 1 — a model published before that change has
+    neither key, so they default to `np.inf` (no clipping), reproducing exactly
+    that old model's original, unclipped behavior rather than silently changing
+    it under an artifact that predates clipping.
     """
     prefix = f"models/{model_id}"
 
@@ -86,7 +94,11 @@ def load_model_artifact(s3: "S3Client", bucket: str, model_id: str) -> ModelArti
         inflation=inflation,
         growth_scaler_mean=scalers["growth_mean"],
         growth_scaler_scale=scalers["growth_scale"],
+        growth_scaler_clip=float(scalers["growth_clip"]) if "growth_clip" in scalers else np.inf,
         inflation_scaler_mean=scalers["inflation_mean"],
         inflation_scaler_scale=scalers["inflation_scale"],
+        inflation_scaler_clip=(
+            float(scalers["inflation_clip"]) if "inflation_clip" in scalers else np.inf
+        ),
         feature_config=FeatureConfig.from_dict(config["feature_config"]),
     )

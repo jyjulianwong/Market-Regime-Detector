@@ -6,6 +6,7 @@ import numpy as np
 import pandas as pd
 
 from market_regime_detector.common.feature_config import FEATURE_CONFIG_V1, Axis, FeatureConfig
+from market_regime_detector.common.scaling import DEFAULT_CLIP
 from market_regime_detector.training.baseline import baseline_signal
 from market_regime_detector.training.evaluation import walk_forward_evaluate
 from market_regime_detector.training.report import (
@@ -26,6 +27,8 @@ class HMMHyperparameters:
     initial_window_months: int = 60
     refit_every_months: int = 12
     random_state: int | None = 0
+    scaler_clip: float = DEFAULT_CLIP
+    scaler_method: str = "median_mad"
 
     def to_dict(self) -> dict[str, object]:
         return asdict(self)
@@ -72,6 +75,8 @@ def train_and_save_model(
         min_state_duration_months=hp.min_state_duration_months,
         composite_separation_margin=hp.composite_separation_margin,
         random_state=hp.random_state,
+        scaler_clip=hp.scaler_clip,
+        scaler_method=hp.scaler_method,
     )
     inflation_fit = fit_hmm(
         inflation_df,
@@ -81,6 +86,8 @@ def train_and_save_model(
         min_state_duration_months=hp.min_state_duration_months,
         composite_separation_margin=hp.composite_separation_margin,
         random_state=hp.random_state,
+        scaler_clip=hp.scaler_clip,
+        scaler_method=hp.scaler_method,
     )
 
     growth_walk_forward = walk_forward_evaluate(
@@ -93,6 +100,8 @@ def train_and_save_model(
         min_state_duration_months=hp.min_state_duration_months,
         composite_separation_margin=hp.composite_separation_margin,
         random_state=hp.random_state,
+        scaler_clip=hp.scaler_clip,
+        scaler_method=hp.scaler_method,
     )
     inflation_walk_forward = walk_forward_evaluate(
         inflation_df,
@@ -104,6 +113,8 @@ def train_and_save_model(
         min_state_duration_months=hp.min_state_duration_months,
         composite_separation_margin=hp.composite_separation_margin,
         random_state=hp.random_state,
+        scaler_clip=hp.scaler_clip,
+        scaler_method=hp.scaler_method,
     )
 
     growth_baseline = baseline_signal(growth_df, growth_features)
@@ -121,8 +132,10 @@ def train_and_save_model(
         output_dir / "scalers.npz",
         growth_mean=growth_fit.scaler_mean,
         growth_scale=growth_fit.scaler_scale,
+        growth_clip=np.float64(growth_fit.scaler_clip),
         inflation_mean=inflation_fit.scaler_mean,
         inflation_scale=inflation_fit.scaler_scale,
+        inflation_clip=np.float64(inflation_fit.scaler_clip),
     )
 
     (output_dir / "labels.json").write_text(

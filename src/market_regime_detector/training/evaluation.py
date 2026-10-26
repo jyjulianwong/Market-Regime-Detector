@@ -4,6 +4,7 @@ import pandas as pd
 
 from market_regime_detector.common.feature_config import FeatureDefinition
 from market_regime_detector.common.forward_filter import filtered_posterior
+from market_regime_detector.common.scaling import DEFAULT_CLIP, apply_scaler
 from market_regime_detector.training.trainer import fit_hmm
 
 logger = logging.getLogger(__name__)
@@ -20,6 +21,8 @@ def walk_forward_evaluate(
     min_state_duration_months: float = 2.0,
     composite_separation_margin: float = 0.1,
     random_state: int | None = None,
+    scaler_clip: float = DEFAULT_CLIP,
+    scaler_method: str = "median_mad",
 ) -> pd.DataFrame:
     """Expanding-window walk-forward evaluation (brief section 2.6): refits
     periodically on an expanding window, produces **causal filtered posteriors**
@@ -81,6 +84,8 @@ def walk_forward_evaluate(
                 min_state_duration_months=min_state_duration_months,
                 composite_separation_margin=composite_separation_margin,
                 random_state=random_state,
+                scaler_clip=scaler_clip,
+                scaler_method=scaler_method,
             )
         except ValueError as exc:
             logger.warning(
@@ -108,9 +113,12 @@ def walk_forward_evaluate(
         # filter carries its memory across the refit boundary (see the docstring), then
         # keep only the out-of-sample rows.
         history_df = df.iloc[:fold_end]
-        observations = (
-            history_df[fit_result.feature_names].to_numpy() - fit_result.scaler_mean
-        ) / fit_result.scaler_scale
+        observations = apply_scaler(
+            history_df[fit_result.feature_names].to_numpy(),
+            fit_result.scaler_mean,
+            fit_result.scaler_scale,
+            fit_result.scaler_clip,
+        )
         posterior = filtered_posterior(
             observations,
             fit_result.start_prob,

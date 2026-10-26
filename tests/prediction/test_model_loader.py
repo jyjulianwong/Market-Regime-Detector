@@ -25,7 +25,7 @@ def s3_client() -> Generator[S3Client, None, None]:
         yield client
 
 
-def _put_npz(client: S3Client, key: str, **arrays: np.ndarray) -> None:
+def _put_npz(client: S3Client, key: str, **arrays: np.ndarray | np.float64) -> None:
     buffer = io.BytesIO()
     np.savez(buffer, **arrays)  # type: ignore[arg-type]
     client.put_object(Bucket=BUCKET, Key=key, Body=buffer.getvalue())
@@ -35,7 +35,11 @@ def _put_json(client: S3Client, key: str, data: object) -> None:
     client.put_object(Bucket=BUCKET, Key=key, Body=json.dumps(data).encode())
 
 
-def _publish_fake_model(client: S3Client) -> None:
+def _publish_fake_model(client: S3Client, *, with_clip: bool = False) -> None:
+    """`with_clip=False` (the default) reproduces a pre-Phase-1 artifact —
+    `scalers.npz` with no `growth_clip`/`inflation_clip` keys — so most tests
+    exercise the old-artifact-compat path rather than the newer one by default.
+    """
     prefix = f"models/{MODEL_ID}"
     _put_npz(
         client,
@@ -55,14 +59,16 @@ def _publish_fake_model(client: S3Client) -> None:
         variances=np.array([[0.3], [0.3]]),
         feature_names=np.array(["f3"]),
     )
-    _put_npz(
-        client,
-        f"{prefix}/scalers.npz",
-        growth_mean=np.array([0.0, 0.0]),
-        growth_scale=np.array([1.0, 1.0]),
-        inflation_mean=np.array([0.0]),
-        inflation_scale=np.array([1.0]),
-    )
+    scaler_arrays: dict[str, np.ndarray | np.float64] = {
+        "growth_mean": np.array([0.0, 0.0]),
+        "growth_scale": np.array([1.0, 1.0]),
+        "inflation_mean": np.array([0.0]),
+        "inflation_scale": np.array([1.0]),
+    }
+    if with_clip:
+        scaler_arrays["growth_clip"] = np.float64(4.0)
+        scaler_arrays["inflation_clip"] = np.float64(3.0)
+    _put_npz(client, f"{prefix}/scalers.npz", **scaler_arrays)
     _put_json(
         client,
         f"{prefix}/labels.json",
@@ -102,6 +108,26 @@ def test_load_model_artifact_reconstructs_scalers(s3_client: S3Client) -> None:
 
     np.testing.assert_array_equal(artifact.growth_scaler_mean, [0.0, 0.0])
     np.testing.assert_array_equal(artifact.inflation_scaler_scale, [1.0])
+
+
+def test_load_model_artifact_old_format_without_clip_defaults_to_no_clip(
+    s3_client: S3Client,
+) -> None:
+    _publish_fake_model(s3_client, with_clip=False)
+
+    artifact = load_model_artifact(s3_client, BUCKET, MODEL_ID)
+
+    assert artifact.growth_scaler_clip == np.inf
+    assert artifact.inflation_scaler_clip == np.inf
+
+
+def test_load_model_artifact_new_format_reads_clip_values(s3_client: S3Client) -> None:
+    _publish_fake_model(s3_client, with_clip=True)
+
+    artifact = load_model_artifact(s3_client, BUCKET, MODEL_ID)
+
+    assert artifact.growth_scaler_clip == 4.0
+    assert artifact.inflation_scaler_clip == 3.0
 
 
 def test_load_model_artifact_reconstructs_feature_config(s3_client: S3Client) -> None:

@@ -327,7 +327,7 @@ classDiagram
     class FitResult {
         <<dataclass>>
         feature_names
-        scaler_mean / scaler_scale
+        scaler_mean / scaler_scale / scaler_clip / scaler_method
         start_prob / transition_matrix
         means / variances
         state_labels : UP or DOWN
@@ -337,6 +337,12 @@ classDiagram
     class trainer {
         <<module trainer.py>>
         fit_hmm(df, feature_defs, n_restarts, ...) FitResult
+    }
+    class scaling {
+        <<common.scaling>>
+        DEFAULT_CLIP
+        fit_robust_scaler(X, clip, method) center, scale
+        apply_scaler(X, center, scale, clip)
     }
     class evaluation {
         <<module evaluation.py>>
@@ -418,7 +424,10 @@ classDiagram
     build_model --> baseline
     build_model --> report
     trainer --> FitResult
+    trainer ..> scaling : fit_robust_scaler / apply_scaler
     evaluation --> trainer : refit per fold
+    evaluation ..> scaling : apply_scaler (scoring time)
+    benchmarks ..> scaling : logistic baseline
     evaluation ..> forward_filter : causal posteriors
     dataset ..> lake : read_series
     dataset ..> features : build_feature_value
@@ -446,6 +455,66 @@ classDiagram
     }
 ```
 
+**Robust scaling + clipping** (`common/scaling.py`, `HMM_ACCURACY_PLAN.md` Phase 1):
+replaces a plain `sklearn.preprocessing.StandardScaler` everywhere a feature is
+standardized before reaching the HMM, the logistic benchmark, or a live
+prediction — a training window with even one outlier month (e.g. ICSA's March
+2020 spike) would otherwise inflate that feature's `scale` for every other row
+the scaler is ever applied to, which is exactly what let a single outlier carve
+out its own HMM state. `fit_robust_scaler(X, clip, method)` computes a center/
+scale that isn't dominated by the outlier (`method="winsorized"`: mean/std of
+the column after clipping it to its own 1st/99th percentile; `method=
+"median_mad"`: median and MAD × 1.4826); `apply_scaler(X, center, scale, clip)`
+standardizes and then clips the result to `[-clip, clip]` — applied identically
+at `trainer.fit_hmm` (fit time), `evaluation.walk_forward_evaluate` (scoring
+time — clipping only at fit time would leave an early fold's tiny training-
+window std producing triple-digit z-scores on a later outlier month),
+`benchmarks.logistic_baseline` (so "agreement with the HMM" isn't partly an
+artifact of which model's scaling handled outliers better), and
+`prediction/predict.py`'s `_axis_posteriors` (live inference).
+
+Defaults (`scaler_method="median_mad"`, `common.scaling.DEFAULT_CLIP = 3.0`)
+were picked by a real-data ablation over clip in `{1.5, 2, 2.5, 3, 4, 5}` ×
+method in `{winsorized, median_mad}`, scored with the full evaluation harness
+(`scripts/evaluate_model.py`'s `run_evaluation`) against `FEATURE_CONFIG_V1` on
+the full `2000-01-01`–present window. `clip=3.0` beat every looser clip on
+every metric (log loss, AUC, accuracy, skill vs. climatology, skipped-fold
+count) on both axes, and beat every tighter clip tried too — not monotonic
+below 3, so this wasn't "tighter is always better." `median_mad` narrowly beat
+`winsorized` at `clip=3.0` on both axes. Before/after, `v1` feature config,
+full history, no holdout split held out of this comparison (see
+`eval/baseline-v1/` → `eval/phase1-robust-scaling/`):
+
+| axis      | metric              | before (StandardScaler) | after (median_mad, clip=3) |
+|-----------|---------------------|-------------------------:|----------------------------:|
+| growth    | log loss            | 5.290                    | 2.554                        |
+| growth    | AUC                 | 0.421                    | 0.662                        |
+| growth    | skill vs climatology| -6.665                   | -2.701                       |
+| growth    | skipped folds        | 2                         | 0                             |
+| inflation | log loss            | 2.314                    | 1.260                         |
+| inflation | AUC                 | 0.421                    | 0.755                         |
+| inflation | skill vs climatology| -2.335                    | -0.816                        |
+| inflation | skipped folds         | 2                           | 0                              |
+
+Every headline metric improved substantially and both axes now evaluate every
+fold (previously 2 skipped folds each, from folds whose expanding window
+hadn't yet "seen" the outlier-deflated-then-reinflated scale needed to pass the
+sanity checks). **Caveat worth carrying into later phases**: growth's DOWN-state
+occupancy rose from 38% to 70% of evaluated months (`training/occupancy`'s
+`overall` report) — still spanning 2015–2026, so not a single episode, but a
+large shift toward DOWN that Phase 1's scope (scaling only) doesn't explain or
+fix. `skill_vs_climatology` is still negative on both axes — Phase 1 alone was
+never expected to beat climatology outright; `HMM_ACCURACY_PLAN.md`'s later
+phases (baseline fairness, feature pruning/surprise features) are where that's
+expected to keep closing.
+
+`training/build_model.py`'s `scalers.npz` gained `growth_clip`/`inflation_clip`
+keys (`HMMHyperparameters.scaler_clip`, plumbed through every `fit_hmm`/
+`walk_forward_evaluate` call); `prediction/model_loader.load_model_artifact`
+defaults a missing key to `np.inf` (no clipping) so a model published before
+this change keeps its original, unclipped behavior on load rather than being
+silently clipped under an artifact that predates `common/scaling.py`.
+
 ### 2.4 `prediction/` — batch Lambda (no `hmmlearn`)
 
 ```mermaid
@@ -471,8 +540,8 @@ classDiagram
         <<dataclass frozen>>
         growth : HMMArtifact
         inflation : HMMArtifact
-        growth_scaler_mean / scale
-        inflation_scaler_mean / scale
+        growth_scaler_mean / scale / clip
+        inflation_scaler_mean / scale / clip
         feature_config : FeatureConfig
     }
     class model_loader {

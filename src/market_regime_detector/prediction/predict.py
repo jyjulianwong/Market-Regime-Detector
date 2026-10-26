@@ -16,6 +16,7 @@ from market_regime_detector.common.features import build_feature_value, build_ra
 from market_regime_detector.common.forward_filter import filtered_posterior, preview_posterior
 from market_regime_detector.common.model_registry import get_model, get_production_model
 from market_regime_detector.common.quadrants import quadrant_probabilities
+from market_regime_detector.common.scaling import apply_scaler
 from market_regime_detector.ingestion.lake import read_series
 from market_regime_detector.ingestion.providers.factory import build_provider
 from market_regime_detector.ingestion.schema import validate_schema
@@ -153,22 +154,26 @@ def _axis_posteriors(
     to some earlier, stale anchor.
     """
     if axis == Axis.GROWTH:
-        hmm, mean, scale = (
+        hmm, mean, scale, clip = (
             artifact_fields.growth,
             artifact_fields.growth_scaler_mean,
             artifact_fields.growth_scaler_scale,
+            artifact_fields.growth_scaler_clip,
         )
     else:
-        hmm, mean, scale = (
+        hmm, mean, scale, clip = (
             artifact_fields.inflation,
             artifact_fields.inflation_scaler_mean,
             artifact_fields.inflation_scaler_scale,
+            artifact_fields.inflation_scaler_clip,
         )
 
     if monthly_axis_df.empty:
         return pd.Series(dtype=float)
 
-    monthly_standardized = (monthly_axis_df[feature_names].to_numpy() - mean) / scale
+    monthly_standardized = apply_scaler(
+        monthly_axis_df[feature_names].to_numpy(), mean, scale, clip
+    )
     alpha_monthly = filtered_posterior(
         monthly_standardized, hmm.start_prob, hmm.transition_matrix, hmm.means, hmm.variances
     )
@@ -183,7 +188,7 @@ def _axis_posteriors(
         if len(prior_month_ends) == 0:
             continue
         anchor = alpha_by_month_end[prior_month_ends[-1]]
-        observations = (group[feature_names].to_numpy() - mean) / scale
+        observations = apply_scaler(group[feature_names].to_numpy(), mean, scale, clip)
         posterior_rows.append(
             preview_posterior(anchor, hmm.transition_matrix, observations, hmm.means, hmm.variances)
         )
