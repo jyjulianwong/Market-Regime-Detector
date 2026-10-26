@@ -1,12 +1,14 @@
 #!/usr/bin/env python3
-"""Score the current (unmodified) model configuration — FEATURE_CONFIG_V1 and
-`training.build_model.DEFAULT_HYPERPARAMETERS` — against four causal baselines,
+"""Score a named `FeatureConfig` (default `v1`, see `common.feature_config.FEATURE_CONFIGS`)
+with `training.build_model.DEFAULT_HYPERPARAMETERS` against four causal baselines,
 writing `evaluation.json` and `evaluation.md` to `--output-dir`.
 
 Usage:
     uv run python scripts/evaluate_model.py --start 2000-01-01 --output-dir ./eval/baseline-v1
     uv run python scripts/evaluate_model.py --start 2000-01-01 --output-dir ./eval/dev \
         --dev-end 2018-12-31 --dev-only
+    uv run python scripts/evaluate_model.py --start 2000-01-01 --output-dir ./eval/v2 \
+        --feature-config v2
 
 A thin wrapper around `market_regime_detector.training` — no scoring logic of its
 own. This never changes features, hyperparameters, or the model itself; it only
@@ -23,7 +25,7 @@ from typing import TYPE_CHECKING, cast
 import pandas as pd
 
 from market_regime_detector.common.aws_s3 import get_s3_client
-from market_regime_detector.common.feature_config import FEATURE_CONFIG_V1
+from market_regime_detector.common.feature_config import FEATURE_CONFIGS
 from market_regime_detector.common.git_info import get_git_sha
 from market_regime_detector.common.logging import configure_logging
 from market_regime_detector.common.settings import get_settings
@@ -64,6 +66,12 @@ def _parse_args() -> argparse.Namespace:
         help="Omit the holdout split entirely (never compute it) — use while "
         "iterating, look at holdout only once at the end.",
     )
+    parser.add_argument(
+        "--feature-config",
+        default="v1",
+        choices=sorted(FEATURE_CONFIGS),
+        help="Named FeatureConfig to evaluate (see common.feature_config.FEATURE_CONFIGS).",
+    )
     return parser.parse_args()
 
 
@@ -84,10 +92,17 @@ def main() -> None:
     args = _parse_args()
     end = args.end if args.end is not None else date.today()
 
+    feature_config = FEATURE_CONFIGS[args.feature_config]
+
     s3 = get_s3_client()
-    logger.info("building dataset from %s to %s", args.start, end)
+    logger.info(
+        "building dataset from %s to %s with feature config %s",
+        args.start,
+        end,
+        feature_config.version,
+    )
     dataset = build_dataset(
-        s3, settings.s3_bucket_name, pd.Timestamp(args.start), pd.Timestamp(end)
+        s3, settings.s3_bucket_name, pd.Timestamp(args.start), pd.Timestamp(end), feature_config
     )
     for warning in cast(list[str], dataset.manifest["warnings"]):
         logger.warning(warning)
@@ -101,7 +116,7 @@ def main() -> None:
         dataset.growth_df,
         dataset.inflation_df,
         labels,
-        FEATURE_CONFIG_V1,
+        feature_config,
         DEFAULT_HYPERPARAMETERS,
         dev_end=pd.Timestamp(args.dev_end),
         include_holdout=not args.dev_only,

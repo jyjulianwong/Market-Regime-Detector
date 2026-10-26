@@ -390,6 +390,10 @@ classDiagram
         run_evaluation(growth_df, inflation_df, labels, feature_config, hp, dev_end, include_holdout) dict
         render_evaluation_markdown(report, metadata) str
     }
+    class occupancy {
+        <<module occupancy.py>>
+        build_occupancy_report(walk_forward_result) dict
+    }
     class publisher {
         <<module publisher.py>>
         PublishStage
@@ -406,6 +410,7 @@ classDiagram
     harness --> benchmarks : 4 causal baselines
     harness --> scoring
     harness --> evaluation : HMM walk-forward
+    harness --> occupancy : per-axis state-occupancy report
     harness --> build_model : HMMHyperparameters
     build_model --> HMMHyperparameters
     build_model --> trainer : fit_hmm (full history, saved)
@@ -777,12 +782,49 @@ sequenceDiagram
     PR-->>PR: invoke_batch_lambda_best_effort(model_id)
 ```
 
-Separately, `scripts/evaluate_model.py` measures the current configuration without
-changing it: it builds the same dataset, reads the label series from the lake
-(`build_label_set`), and calls `run_evaluation`, which scores the HMM's walk-forward
-posteriors against four causal baselines (climatology, calibrated persistence, fixed
-rule, logistic) on dev/holdout splits. It writes `evaluation.json` and `evaluation.md`
-locally and publishes nothing.
+Separately, `scripts/evaluate_model.py` measures a named configuration without
+changing it: `--feature-config` selects a `FeatureConfig` by version from
+`common.feature_config.FEATURE_CONFIGS` (default `v1`; later phases register
+`v2`/`v3` there without touching this script again). It builds the dataset for
+that config, reads the label series from the lake (`build_label_set`), and calls
+`run_evaluation`, which scores the HMM's walk-forward posteriors against four
+causal baselines (climatology, calibrated persistence, fixed rule, logistic) on
+dev/holdout splits. It writes `evaluation.json` and `evaluation.md` locally and
+publishes nothing — see `eval/baseline-v1/` for the `v1` reference run
+(`HMM_ACCURACY_PLAN.md`'s Phase 0 deliverable), regenerated whenever the
+evaluation path itself changes (e.g. the walk-forward fix below) so later phases
+always diff against the current code, not a stale snapshot.
+
+**What `run_evaluation` actually measures, per axis and per split (dev/holdout/all):**
+log loss, Brier score, skill vs. climatology with a block-bootstrapped 95% CI
+(`harness._skill_ci`, 6-month blocks), AUC, accuracy, expected calibration error
+plus the full calibration table, flip rate per year, and mean regime duration —
+for all five "models" (climatology, persistence, rule, logistic, hmm_current) on
+the **same-month comparability intersection** (a model's own raw coverage before
+that intersection is reported separately under `coverage`, never silently
+dropped). Quadrant-level log loss needs both axes' predictions and both axes'
+true labels on the same month, so it's computed on its own, narrower
+intersection. Recession detection lag (growth axis only, vs. `USREC`) and every
+walk-forward fold any model's HMM/logistic fit skipped (with why) round out the
+report.
+
+**State-occupancy report** (`training/occupancy.build_occupancy_report`, one per
+axis, independent of dev/holdout): answers "is a state just one episode?" (brief
+motivation: Phase 0 of `HMM_ACCURACY_PLAN.md` — was the growth DOWN state really
+just COVID, is inflation's DOWN/UP really just 2021-23?) directly rather than
+leaving it implicit in `flip_rate_per_year`. `overall` groups every evaluated
+month by its assigned UP/DOWN label across *all* folds — meaningful despite each
+fold refitting its own HMM, since the label comes from that fold's own composite
+score (brief section 2.3), not an arbitrary state index. `by_fold` keeps each
+fold's own per-feature emission means in z-units (`walk_forward_evaluate`'s
+`fold_fits` attr) plus that fold's own occupancy fraction, so a state that only
+shows up because one feature's value is extreme in one fold is visible fold by
+fold, not just smoothed into the aggregate. On the current `v1` reference run,
+growth's DOWN state spans 2016-05 to 2026-09 (38% of months) — not literally just
+COVID — but fold 6 (2020-05 to 2021-04, the COVID-era refit) is visibly the most
+extreme fold by emission z-means (`indpro_3m_change` ≈ -3.0 vs. every other
+fold's DOWN state sitting around -1 to -1.3), which is exactly the outlier
+amplification Phase 1's robust scaling targets.
 
 Only the full-history fit is saved; the walk-forward fits exist to produce honest
 out-of-sample metrics in `metrics.json` and `model_card.md`.
@@ -858,7 +900,8 @@ One versioned S3 bucket (`Settings.s3_bucket_name`) plus one DynamoDB table.
 | Change HMM fitting or its sanity checks | `training/trainer.py` (`fit_hmm`), hyperparameters in `training/build_model.py` |
 | Change evaluation / model card | `training/evaluation.py`, `training/baseline.py`, `training/report.py` |
 | Change how inference works | `common/forward_filter.py` (`filtered_posterior`, `preview_posterior`), `prediction/predict.py` (`_axis_posteriors`) |
-| Score a model against baselines | `scripts/evaluate_model.py` → `training/harness.py`, `benchmarks.py`, `scoring.py`, `labels.py`; label series in `ingestion/series_catalog.py` (`EVALUATION_SERIES`) |
+| Score a model against baselines | `scripts/evaluate_model.py --feature-config <version>` → `training/harness.py`, `benchmarks.py`, `scoring.py`, `labels.py`, `occupancy.py`; label series in `ingestion/series_catalog.py` (`EVALUATION_SERIES`) |
+| Evaluate a new `FeatureConfig` version | Register it in `common/feature_config.py`'s `FEATURE_CONFIGS` dict, then `scripts/evaluate_model.py --feature-config <version>` — no other script change needed |
 | Change the published JSON shape | `prediction/outputs.py` **and** `server/schemas.py` (keep in sync) |
 | Add an API endpoint | `server/routes.py`, `server/schemas.py`, `server/reads.py` |
 | Change schedules, IAM, Lambdas | `terraform/main.tf`, `docker/batch-lambda.Dockerfile`, `scripts/package_lambda.sh` |

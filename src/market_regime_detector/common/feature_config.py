@@ -305,3 +305,13 @@ FEATURE_CONFIG_V1 = FeatureConfig(
         ),
     ),
 )
+
+
+# A registry of every named `FeatureConfig`, keyed by `version` — lets callers
+# (e.g. `scripts/evaluate_model.py --feature-config`) select a config by name
+# instead of importing a specific module-level constant. `HMM_ACCURACY_PLAN.md`
+# Phase 0 wants this so later phases' `FEATURE_CONFIG_V2`/`V3` can be evaluated
+# the same way as `v1` without changing the evaluation script again.
+FEATURE_CONFIGS: dict[str, FeatureConfig] = {
+    FEATURE_CONFIG_V1.version: FEATURE_CONFIG_V1,
+}

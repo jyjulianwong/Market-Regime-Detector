@@ -4,6 +4,7 @@ import pytest
 
 from market_regime_detector.common.feature_config import (
     FEATURE_CONFIG_V1,
+    FEATURE_CONFIGS,
     Axis,
     FeatureConfig,
     FeatureDefinition,
@@ -56,6 +57,11 @@ def test_content_hash_changes_when_a_field_changes() -> None:
     config_b = FeatureConfig(version="v1", features=(_definition(sign=-1),))
 
     assert config_a.content_hash() != config_b.content_hash()
+
+
+def test_feature_configs_registry_resolves_v1_by_name() -> None:
+    assert FEATURE_CONFIGS["v1"] is FEATURE_CONFIG_V1
+    assert FEATURE_CONFIGS[FEATURE_CONFIG_V1.version] is FEATURE_CONFIG_V1
 
 
 def test_first_pass_config_has_ten_features_from_nine_series() -> None:

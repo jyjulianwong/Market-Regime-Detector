@@ -1,0 +1,2683 @@
+{
+  "label_lag_months": 1,
+  "dev_end": "2016-12-31",
+  "include_holdout": true,
+  "axes": {
+    "growth": {
+      "coverage": {
+        "climatology": {
+          "n_months_available": 149,
+          "n_months_in_comparison": 148
+        },
+        "persistence": {
+          "n_months_available": 149,
+          "n_months_in_comparison": 148
+        },
+        "rule": {
+          "n_months_available": 149,
+          "n_months_in_comparison": 148
+        },
+        "logistic": {
+          "n_months_available": 149,
+          "n_months_in_comparison": 148
+        },
+        "hmm_current": {
+          "n_months_available": 149,
+          "n_months_in_comparison": 148
+        }
+      },
+      "skipped_folds": {
+        "climatology": [],
+        "persistence": [],
+        "rule": [],
+        "logistic": [],
+        "hmm_current": []
+      },
+      "occupancy": {
+        "overall": {
+          "DOWN": {
+            "n_months": 57,
+            "fraction": 0.3825503355704698,
+            "first_date": "2016-05-31",
+            "last_date": "2026-09-30"
+          },
+          "UP": {
+            "n_months": 92,
+            "fraction": 0.6174496644295302,
+            "first_date": "2014-05-31",
+            "last_date": "2026-04-30"
+          }
+        },
+        "by_fold": [
+          {
+            "fold_id": 0,
+            "test_start": "2014-05-31",
+            "test_end": "2015-04-30",
+            "occupancy": {
+              "UP": {
+                "n_months": 12,
+                "fraction": 1.0,
+                "first_date": "2014-05-31",
+                "last_date": "2015-04-30"
+              }
+            },
+            "state_means": {
+              "UP": {
+                "indpro_3m_change": 0.14754921884926683,
+                "payems_3m_change": 0.31245065536770017,
+                "icsa_4wk_avg_change": 0.10314008092382278,
+                "t10y2y_level": -0.0832279334635366,
+                "copper_gold_3m_momentum": -0.15463642586141596
+              },
+              "DOWN": {
+                "indpro_3m_change": -1.1156086388240225,
+                "payems_3m_change": -2.3624161012369114,
+                "icsa_4wk_avg_change": -0.7798344592062766,
+                "t10y2y_level": 0.6292801973980495,
+                "copper_gold_3m_momentum": 1.1691944824465876
+              }
+            }
+          },
+          {
+            "fold_id": 1,
+            "test_start": "2015-05-31",
+            "test_end": "2016-04-30",
+            "occupancy": {
+              "UP": {
+                "n_months": 12,
+                "fraction": 1.0,
+                "first_date": "2015-05-31",
+                "last_date": "2016-04-30"
+              }
+            },
+            "state_means": {
+              "UP": {
+                "indpro_3m_change": 0.12663402358473266,
+                "payems_3m_change": 0.27698121170942025,
+                "icsa_4wk_avg_change": 0.08723252171897332,
+                "t10y2y_level": -0.08414768741291168,
+                "copper_gold_3m_momentum": -0.13239869100916946
+              },
+              "DOWN": {
+                "indpro_3m_change": -1.1721027347420692,
+                "payems_3m_change": -2.563690440583353,
+                "icsa_4wk_avg_change": -0.8074092125552722,
+                "t10y2y_level": 0.7788565169683774,
+                "copper_gold_3m_momentum": 1.2254595046036942
+              }
+            }
+          },
+          {
+            "fold_id": 2,
+            "test_start": "2016-05-31",
+            "test_end": "2017-04-30",
+            "occupancy": {
+              "DOWN": {
+                "n_months": 12,
+                "fraction": 1.0,
+                "first_date": "2016-05-31",
+                "last_date": "2017-04-30"
+              }
+            },
+            "state_means": {
+              "UP": {
+                "indpro_3m_change": 0.12867217772872483,
+                "payems_3m_change": -1.0506318799206453,
+                "icsa_4wk_avg_change": -0.26974606276088714,
+                "t10y2y_level": 1.0485842021492926,
+                "copper_gold_3m_momentum": 0.5452513344482455
+              },
+              "DOWN": {
+                "indpro_3m_change": -0.049506865411005754,
+                "payems_3m_change": 0.40423261651328374,
+                "icsa_4wk_avg_change": 0.10378531132352936,
+                "t10y2y_level": -0.40344476859137035,
+                "copper_gold_3m_momentum": -0.2097864892487586
+              }
+            }
+          },
+          {
+            "fold_id": 3,
+            "test_start": "2017-05-31",
+            "test_end": "2018-04-30",
+            "occupancy": {
+              "DOWN": {
+                "n_months": 12,
+                "fraction": 1.0,
+                "first_date": "2017-05-31",
+                "last_date": "2018-04-30"
+              }
+            },
+            "state_means": {
+              "UP": {
+                "indpro_3m_change": 0.18029918146579108,
+                "payems_3m_change": -1.0045637784020651,
+                "icsa_4wk_avg_change": -0.24844170338172558,
+                "t10y2y_level": 1.1578257647457084,
+                "copper_gold_3m_momentum": 0.3271638363746777
+              },
+              "DOWN": {
+                "indpro_3m_change": -0.06746403534693766,
+                "payems_3m_change": 0.3758859341645649,
+                "icsa_4wk_avg_change": 0.09296148613841676,
+                "t10y2y_level": -0.43323323868347235,
+                "copper_gold_3m_momentum": -0.12241759747317933
+              }
+            }
+          },
+          {
+            "fold_id": 4,
+            "test_start": "2018-05-31",
+            "test_end": "2019-04-30",
+            "occupancy": {
+              "DOWN": {
+                "n_months": 12,
+                "fraction": 1.0,
+                "first_date": "2018-05-31",
+                "last_date": "2019-04-30"
+              }
+            },
+            "state_means": {
+              "UP": {
+                "indpro_3m_change": 0.13151846699517752,
+                "payems_3m_change": -1.0747423937047775,
+                "icsa_4wk_avg_change": -0.25700040968274734,
+                "t10y2y_level": 1.2168080069725273,
+                "copper_gold_3m_momentum": 0.3133945457171689
+              },
+              "DOWN": {
+                "indpro_3m_change": -0.04269947281905572,
+                "payems_3m_change": 0.3489314822166266,
+                "icsa_4wk_avg_change": 0.08343909610912574,
+                "t10y2y_level": -0.3950552466646346,
+                "copper_gold_3m_momentum": -0.10174831103362299
+              }
+            }
+          },
+          {
+            "fold_id": 5,
+            "test_start": "2019-05-31",
+            "test_end": "2020-04-30",
+            "occupancy": {
+              "DOWN": {
+                "n_months": 10,
+                "fraction": 0.8333333333333334,
+                "first_date": "2019-05-31",
+                "last_date": "2020-02-29"
+              },
+              "UP": {
+                "n_months": 2,
+                "fraction": 0.16666666666666666,
+                "first_date": "2020-03-31",
+                "last_date": "2020-04-30"
+              }
+            },
+            "state_means": {
+              "UP": {
+                "indpro_3m_change": 0.11842504973200749,
+                "payems_3m_change": -1.1637569451290448,
+                "icsa_4wk_avg_change": -0.2864204000439547,
+                "t10y2y_level": 1.2370708825012557,
+                "copper_gold_3m_momentum": 0.33753353755405613
+              },
+              "DOWN": {
+                "indpro_3m_change": -0.033579723444822816,
+                "payems_3m_change": 0.3299862357065429,
+                "icsa_4wk_avg_change": 0.08121523144128845,
+                "t10y2y_level": -0.350774588738107,
+                "copper_gold_3m_momentum": -0.09570849132060279
+              }
+            }
+          },
+          {
+            "fold_id": 6,
+            "test_start": "2020-05-31",
+            "test_end": "2021-04-30",
+            "occupancy": {
+              "DOWN": {
+                "n_months": 6,
+                "fraction": 0.5,
+                "first_date": "2020-05-31",
+                "last_date": "2020-10-31"
+              },
+              "UP": {
+                "n_months": 6,
+                "fraction": 0.5,
+                "first_date": "2020-11-30",
+                "last_date": "2021-04-30"
+              }
+            },
+            "state_means": {
+              "UP": {
+                "indpro_3m_change": 0.04649205441083342,
+                "payems_3m_change": 0.005577318199964475,
+                "icsa_4wk_avg_change": -0.0009104894282183888,
+                "t10y2y_level": 0.018540572618651087,
+                "copper_gold_3m_momentum": 0.02255284506377601
+              },
+              "DOWN": {
+                "indpro_3m_change": -3.021177941658732,
+                "payems_3m_change": -0.3624290415400176,
+                "icsa_4wk_avg_change": 0.0591660362508284,
+                "t10y2y_level": -1.2048159568559962,
+                "copper_gold_3m_momentum": -1.4655441427954998
+              }
+            }
+          },
+          {
+            "fold_id": 7,
+            "test_start": "2021-05-31",
+            "test_end": "2022-04-30",
+            "occupancy": {
+              "UP": {
+                "n_months": 12,
+                "fraction": 1.0,
+                "first_date": "2021-05-31",
+                "last_date": "2022-04-30"
+              }
+            },
+            "state_means": {
+              "UP": {
+                "indpro_3m_change": 0.062203892742270166,
+                "payems_3m_change": 0.0705509923609071,
+                "icsa_4wk_avg_change": 0.05152811490345682,
+                "t10y2y_level": 0.07013688416468145,
+                "copper_gold_3m_momentum": -0.002091978218625171
+              },
+              "DOWN": {
+                "indpro_3m_change": -0.9291506063099476,
+                "payems_3m_change": -1.0538327175038615,
+                "icsa_4wk_avg_change": -0.7696846144810607,
+                "t10y2y_level": -1.04764710974461,
+                "copper_gold_3m_momentum": 0.031248250624390884
+              }
+            }
+          },
+          {
+            "fold_id": 8,
+            "test_start": "2022-05-31",
+            "test_end": "2023-04-30",
+            "occupancy": {
+              "UP": {
+                "n_months": 12,
+                "fraction": 1.0,
+                "first_date": "2022-05-31",
+                "last_date": "2023-04-30"
+              }
+            },
+            "state_means": {
+              "UP": {
+                "indpro_3m_change": 0.06111301807958795,
+                "payems_3m_change": 0.07050244134655856,
+                "icsa_4wk_avg_change": 0.049327937600189026,
+                "t10y2y_level": 0.06033929941632725,
+                "copper_gold_3m_momentum": 0.0005017536206295402
+              },
+              "DOWN": {
+                "indpro_3m_change": -1.0237395050385583,
+                "payems_3m_change": -1.1810271637074197,
+                "icsa_4wk_avg_change": -0.8263208070926062,
+                "t10y2y_level": -1.0107784963000448,
+                "copper_gold_3m_momentum": -0.008405165042985874
+              }
+            }
+          },
+          {
+            "fold_id": 9,
+            "test_start": "2023-05-31",
+            "test_end": "2024-04-30",
+            "occupancy": {
+              "UP": {
+                "n_months": 12,
+                "fraction": 1.0,
+                "first_date": "2023-05-31",
+                "last_date": "2024-04-30"
+              }
+            },
+            "state_means": {
+              "UP": {
+                "indpro_3m_change": 0.057956521015018754,
+                "payems_3m_change": 0.06862914753882836,
+                "icsa_4wk_avg_change": 0.04766891420462659,
+                "t10y2y_level": 0.042015445375201715,
+                "copper_gold_3m_momentum": -0.0005036465042753583
+              },
+              "DOWN": {
+                "indpro_3m_change": -1.0529146575560242,
+                "payems_3m_change": -1.2468076777845452,
+                "icsa_4wk_avg_change": -0.8660164136288538,
+                "t10y2y_level": -0.7633080368614757,
+                "copper_gold_3m_momentum": 0.00914990715954318
+              }
+            }
+          },
+          {
+            "fold_id": 10,
+            "test_start": "2024-05-31",
+            "test_end": "2025-04-30",
+            "occupancy": {
+              "UP": {
+                "n_months": 12,
+                "fraction": 1.0,
+                "first_date": "2024-05-31",
+                "last_date": "2025-04-30"
+              }
+            },
+            "state_means": {
+              "UP": {
+                "indpro_3m_change": 0.054602729007058586,
+                "payems_3m_change": 0.06573395720753061,
+                "icsa_4wk_avg_change": 0.04601197944113431,
+                "t10y2y_level": 0.030372753453303758,
+                "copper_gold_3m_momentum": -0.0028551347019352413
+              },
+              "DOWN": {
+                "indpro_3m_change": -1.051370463630447,
+                "payems_3m_change": -1.2657012263363534,
+                "icsa_4wk_avg_change": -0.8859563805194933,
+                "t10y2y_level": -0.5848245401032262,
+                "copper_gold_3m_momentum": 0.05497535287866152
+              }
+            }
+          },
+          {
+            "fold_id": 11,
+            "test_start": "2025-05-31",
+            "test_end": "2026-04-30",
+            "occupancy": {
+              "UP": {
+                "n_months": 12,
+                "fraction": 1.0,
+                "first_date": "2025-05-31",
+                "last_date": "2026-04-30"
+              }
+            },
+            "state_means": {
+              "UP": {
+                "indpro_3m_change": 0.0523737231898467,
+                "payems_3m_change": 0.06322061999227277,
+                "icsa_4wk_avg_change": 0.04456528872383274,
+                "t10y2y_level": 0.02533382206997281,
+                "copper_gold_3m_momentum": -0.004891405620611345
+              },
+              "DOWN": {
+                "indpro_3m_change": -1.0710895458654752,
+                "payems_3m_change": -1.2929183001063471,
+                "icsa_4wk_avg_change": -0.9114000676932466,
+                "t10y2y_level": -0.5180993506534458,
+                "copper_gold_3m_momentum": 0.10003362575223546
+              }
+            }
+          },
+          {
+            "fold_id": 12,
+            "test_start": "2026-05-31",
+            "test_end": "2026-09-30",
+            "occupancy": {
+              "DOWN": {
+                "n_months": 5,
+                "fraction": 1.0,
+                "first_date": "2026-05-31",
+                "last_date": "2026-09-30"
+              }
+            },
+            "state_means": {
+              "UP": {
+                "indpro_3m_change": -0.31528243435670067,
+                "payems_3m_change": -0.41493760067888824,
+                "icsa_4wk_avg_change": -0.3366112046627265,
+                "t10y2y_level": 0.28021587296168843,
+                "copper_gold_3m_momentum": 0.7858719308077159
+              },
+              "DOWN": {
+                "indpro_3m_change": 0.04987052092621012,
+                "payems_3m_change": 0.06563370503006363,
+                "icsa_4wk_avg_change": 0.0532442480037984,
+                "t10y2y_level": -0.044323787289022525,
+                "copper_gold_3m_momentum": -0.12430709199081799
+              }
+            }
+          }
+        ]
+      },
+      "splits": {
+        "dev": {
+          "climatology": {
+            "n_months": 32,
+            "log_loss": 0.6012204454135024,
+            "brier": 0.2052694183832648,
+            "skill_vs_climatology": 0.0,
+            "skill_vs_climatology_ci_low": 0.0,
+            "skill_vs_climatology_ci_high": 0.0,
+            "auc": 0.5048309178743962,
+            "accuracy": 0.71875,
+            "expected_calibration_error": 0.06388358059575996,
+            "calibration_table": [
+              {
+                "bin": "(0.2, 0.3]",
+                "n": 6,
+                "mean_p": 0.293507187705173,
+                "mean_y": 0.3333333333333333
+              },
+              {
+                "bin": "(0.3, 0.4]",
+                "n": 26,
+                "mean_p": 0.33866606558828294,
+                "mean_y": 0.2692307692307692
+              }
+            ],
+            "flip_rate_per_year": 0.0,
+            "mean_regime_duration_months": 32.0
+          },
+          "persistence": {
+            "n_months": 32,
+            "log_loss": 0.3984211465847445,
+            "brier": 0.11737631901548358,
+            "skill_vs_climatology": 0.3373127117945537,
+            "skill_vs_climatology_ci_low": 0.15430456132397996,
+            "skill_vs_climatology_ci_high": 0.5444508892328074,
+            "auc": 0.78743961352657,
+            "accuracy": 0.875,
+            "expected_calibration_error": 0.17222318203113782,
+            "calibration_table": [
+              {
+                "bin": "(0.1, 0.2]",
+                "n": 23,
+                "mean_p": 0.16509254130579906,
+                "mean_y": 0.08695652173913043
+              },
+              {
+                "bin": "(0.6, 0.7]",
+                "n": 7,
+                "mean_p": 0.6711462374391436,
+                "mean_y": 1.0
+              },
+              {
+                "bin": "(0.7, 0.8]",
+                "n": 2,
+                "mean_p": 0.7060185185185186,
+                "mean_y": 0.0
+              }
+            ],
+            "flip_rate_per_year": 1.125,
+            "mean_regime_duration_months": 8.0
+          },
+          "rule": {
+            "n_months": 32,
+            "log_loss": 0.47678809720804705,
+            "brier": 0.1500994945317412,
+            "skill_vs_climatology": 0.2069662619671463,
+            "skill_vs_climatology_ci_low": 0.03493710103362029,
+            "skill_vs_climatology_ci_high": 0.29918352608304316,
+            "auc": 0.8792270531400967,
+            "accuracy": 0.84375,
+            "expected_calibration_error": 0.19459278947717065,
+            "calibration_table": [
+              {
+                "bin": "(0.1, 0.2]",
+                "n": 3,
+                "mean_p": 0.1738821010578554,
+                "mean_y": 0.0
+              },
+              {
+                "bin": "(0.2, 0.3]",
+                "n": 9,
+                "mean_p": 0.24800973708738028,
+                "mean_y": 0.0
+              },
+              {
+                "bin": "(0.3, 0.4]",
+                "n": 10,
+                "mean_p": 0.3456795548943373,
+                "mean_y": 0.2
+              },
+              {
+                "bin": "(0.4, 0.5]",
+                "n": 2,
+                "mean_p": 0.46218430505298463,
+                "mean_y": 0.5
+              },
+              {
+                "bin": "(0.5, 0.6]",
+                "n": 5,
+                "mean_p": 0.5227343178232176,
+                "mean_y": 0.8
+              },
+              {
+                "bin": "(0.6, 0.7]",
+                "n": 2,
+                "mean_p": 0.6528975615582159,
+                "mean_y": 0.5
+              },
+              {
+                "bin": "(0.7, 0.8]",
+                "n": 1,
+                "mean_p": 0.7513151465282748,
+                "mean_y": 1.0
+              }
+            ],
+            "flip_rate_per_year": 2.25,
+            "mean_regime_duration_months": 4.571428571428571
+          },
+          "logistic": {
+            "n_months": 32,
+            "log_loss": 0.42825677004430157,
+            "brier": 0.13000707814298426,
+            "skill_vs_climatology": 0.2876876139004909,
+            "skill_vs_climatology_ci_low": 0.18972065025239734,
+            "skill_vs_climatology_ci_high": 0.5209224793272405,
+            "auc": 0.8454106280193237,
+            "accuracy": 0.875,
+            "expected_calibration_error": 0.16178287981083372,
+            "calibration_table": [
+              {
+                "bin": "(-0.001, 0.1]",
+                "n": 5,
+                "mean_p": 0.06723134188243948,
+                "mean_y": 0.2
+              },
+              {
+                "bin": "(0.1, 0.2]",
+                "n": 10,
+                "mean_p": 0.14355052967555335,
+                "mean_y": 0.0
+              },
+              {
+                "bin": "(0.2, 0.3]",
+                "n": 6,
+                "mean_p": 0.27130738661729287,
+                "mean_y": 0.16666666666666666
+              },
+              {
+                "bin": "(0.3, 0.4]",
+                "n": 4,
+                "mean_p": 0.34961202802550195,
+                "mean_y": 0.25
+              },
+              {
+                "bin": "(0.4, 0.5]",
+                "n": 2,
+                "mean_p": 0.4635113104559625,
+                "mean_y": 0.5
+              },
+              {
+                "bin": "(0.5, 0.6]",
+                "n": 3,
+                "mean_p": 0.5380511032885607,
+                "mean_y": 1.0
+              },
+              {
+                "bin": "(0.6, 0.7]",
+                "n": 1,
+                "mean_p": 0.6972220309931321,
+                "mean_y": 1.0
+              },
+              {
+                "bin": "(0.7, 0.8]",
+                "n": 1,
+                "mean_p": 0.7101909034316833,
+                "mean_y": 1.0
+              }
+            ],
+            "flip_rate_per_year": 1.875,
+            "mean_regime_duration_months": 5.333333333333333
+          },
+          "hmm_current": {
+            "n_months": 32,
+            "log_loss": 4.8930401999563085,
+            "brier": 0.5312499999999999,
+            "skill_vs_climatology": -7.138512649201433,
+            "skill_vs_climatology_ci_low": -17.619055978754258,
+            "skill_vs_climatology_ci_high": -2.8234648232915194,
+            "auc": 0.6086956521739131,
+            "accuracy": 0.46875,
+            "expected_calibration_error": 0.5312499999999993,
+            "calibration_table": [
+              {
+                "bin": "(-0.001, 0.1]",
+                "n": 8,
+                "mean_p": 2.79017737098233e-15,
+                "mean_y": 0.125
+              },
+              {
+                "bin": "(0.9, 1.0]",
+                "n": 24,
+                "mean_p": 1.0,
+                "mean_y": 0.3333333333333333
+              }
+            ],
+            "flip_rate_per_year": 0.375,
+            "mean_regime_duration_months": 16.0
+          }
+        },
+        "holdout": {
+          "climatology": {
+            "n_months": 116,
+            "log_loss": 0.7146359012335494,
+            "brier": 0.25982602730173565,
+            "skill_vs_climatology": 0.0,
+            "skill_vs_climatology_ci_low": 0.0,
+            "skill_vs_climatology_ci_high": 0.0,
+            "auc": 0.3674879807692308,
+            "accuracy": 0.5517241379310345,
+            "expected_calibration_error": 0.08905370068982264,
+            "calibration_table": [
+              {
+                "bin": "(0.2, 0.3]",
+                "n": 1,
+                "mean_p": 0.29347826086956524,
+                "mean_y": 1.0
+              },
+              {
+                "bin": "(0.3, 0.4]",
+                "n": 78,
+                "mean_p": 0.3703278039358619,
+                "mean_y": 0.47435897435897434
+              },
+              {
+                "bin": "(0.4, 0.5]",
+                "n": 37,
+                "mean_p": 0.41916962832124927,
+                "mean_y": 0.3783783783783784
+              }
+            ],
+            "flip_rate_per_year": 0.0,
+            "mean_regime_duration_months": 116.0
+          },
+          "persistence": {
+            "n_months": 116,
+            "log_loss": 0.4466977838555448,
+            "brier": 0.13633078088227446,
+            "skill_vs_climatology": 0.37492955072017853,
+            "skill_vs_climatology_ci_low": 0.27168637441858273,
+            "skill_vs_climatology_ci_high": 0.5523527038356052,
+            "auc": 0.8103966346153847,
+            "accuracy": 0.8448275862068966,
+            "expected_calibration_error": 0.043508873602466615,
+            "calibration_table": [
+              {
+                "bin": "(0.1, 0.2]",
+                "n": 64,
+                "mean_p": 0.14478546507198015,
+                "mean_y": 0.140625
+              },
+              {
+                "bin": "(0.6, 0.7]",
+                "n": 8,
+                "mean_p": 0.6887842978690448,
+                "mean_y": 0.875
+              },
+              {
+                "bin": "(0.7, 0.8]",
+                "n": 37,
+                "mean_p": 0.7665146594489815,
+                "mean_y": 0.8378378378378378
+              },
+              {
+                "bin": "(0.8, 0.9]",
+                "n": 7,
+                "mean_p": 0.8074394794062958,
+                "mean_y": 0.7142857142857143
+              }
+            ],
+            "flip_rate_per_year": 1.7586206896551724,
+            "mean_regime_duration_months": 6.444444444444445
+          },
+          "rule": {
+            "n_months": 116,
+            "log_loss": 0.5817975844664685,
+            "brier": 0.19516174435665035,
+            "skill_vs_climatology": 0.1858825123923744,
+            "skill_vs_climatology_ci_low": 0.10822807852925877,
+            "skill_vs_climatology_ci_high": 0.27393367320099543,
+            "auc": 0.8368389423076923,
+            "accuracy": 0.6810344827586207,
+            "expected_calibration_error": 0.16459270385358654,
+            "calibration_table": [
+              {
+                "bin": "(-0.001, 0.1]",
+                "n": 4,
+                "mean_p": 0.009274779328336247,
+                "mean_y": 0.25
+              },
+              {
+                "bin": "(0.1, 0.2]",
+                "n": 4,
+                "mean_p": 0.1797670121829281,
+                "mean_y": 0.25
+              },
+              {
+                "bin": "(0.2, 0.3]",
+                "n": 30,
+                "mean_p": 0.26731110164639155,
+                "mean_y": 0.06666666666666667
+              },
+              {
+                "bin": "(0.3, 0.4]",
+                "n": 33,
+                "mean_p": 0.34962420698350216,
+                "mean_y": 0.3939393939393939
+              },
+              {
+                "bin": "(0.4, 0.5]",
+                "n": 24,
+                "mean_p": 0.44597951436921707,
+                "mean_y": 0.7083333333333334
+              },
+              {
+                "bin": "(0.5, 0.6]",
+                "n": 7,
+                "mean_p": 0.5480244802592484,
+                "mean_y": 1.0
+              },
+              {
+                "bin": "(0.6, 0.7]",
+                "n": 8,
+                "mean_p": 0.6515258460977066,
+                "mean_y": 0.75
+              },
+              {
+                "bin": "(0.7, 0.8]",
+                "n": 4,
+                "mean_p": 0.7543135003945974,
+                "mean_y": 0.75
+              },
+              {
+                "bin": "(0.9, 1.0]",
+                "n": 2,
+                "mean_p": 0.9490904659979342,
+                "mean_y": 1.0
+              }
+            ],
+            "flip_rate_per_year": 1.5517241379310345,
+            "mean_regime_duration_months": 7.25
+          },
+          "logistic": {
+            "n_months": 116,
+            "log_loss": 0.7919493067244763,
+            "brier": 0.2354854869826627,
+            "skill_vs_climatology": -0.10818572836527585,
+            "skill_vs_climatology_ci_low": -0.48249919729319674,
+            "skill_vs_climatology_ci_high": 0.15473797375024204,
+            "auc": 0.6589543269230769,
+            "accuracy": 0.646551724137931,
+            "expected_calibration_error": 0.12557267326643695,
+            "calibration_table": [
+              {
+                "bin": "(-0.001, 0.1]",
+                "n": 6,
+                "mean_p": 0.021152008602113272,
+                "mean_y": 0.5
+              },
+              {
+                "bin": "(0.1, 0.2]",
+                "n": 10,
+                "mean_p": 0.16030628644508219,
+                "mean_y": 0.3
+              },
+              {
+                "bin": "(0.2, 0.3]",
+                "n": 23,
+                "mean_p": 0.25193032131016013,
+                "mean_y": 0.2608695652173913
+              },
+              {
+                "bin": "(0.3, 0.4]",
+                "n": 19,
+                "mean_p": 0.3453526502639777,
+                "mean_y": 0.42105263157894735
+              },
+              {
+                "bin": "(0.4, 0.5]",
+                "n": 19,
+                "mean_p": 0.4532688318770728,
+                "mean_y": 0.3684210526315789
+              },
+              {
+                "bin": "(0.5, 0.6]",
+                "n": 14,
+                "mean_p": 0.5621040812015964,
+                "mean_y": 0.5
+              },
+              {
+                "bin": "(0.6, 0.7]",
+                "n": 8,
+                "mean_p": 0.6609809555902865,
+                "mean_y": 0.375
+              },
+              {
+                "bin": "(0.7, 0.8]",
+                "n": 6,
+                "mean_p": 0.7430005493909441,
+                "mean_y": 1.0
+              },
+              {
+                "bin": "(0.8, 0.9]",
+                "n": 3,
+                "mean_p": 0.8502009562751992,
+                "mean_y": 1.0
+              },
+              {
+                "bin": "(0.9, 1.0]",
+                "n": 8,
+                "mean_p": 0.9864620422602106,
+                "mean_y": 0.75
+              }
+            ],
+            "flip_rate_per_year": 2.896551724137931,
+            "mean_regime_duration_months": 4.0
+          },
+          "hmm_current": {
+            "n_months": 116,
+            "log_loss": 5.399210820864935,
+            "brier": 0.5862052796214896,
+            "skill_vs_climatology": -6.5551911281608355,
+            "skill_vs_climatology_ci_low": -9.157539968530838,
+            "skill_vs_climatology_ci_high": -4.269707899584499,
+            "auc": 0.41646634615384615,
+            "accuracy": 0.41379310344827586,
+            "expected_calibration_error": 0.5861983284446441,
+            "calibration_table": [
+              {
+                "bin": "(-0.001, 0.1]",
+                "n": 48,
+                "mean_p": 1.6932845022170578e-06,
+                "mean_y": 0.5416666666666666
+              },
+              {
+                "bin": "(0.9, 1.0]",
+                "n": 68,
+                "mean_p": 0.9999865790769827,
+                "mean_y": 0.38235294117647056
+              }
+            ],
+            "flip_rate_per_year": 0.41379310344827586,
+            "mean_regime_duration_months": 23.2
+          }
+        },
+        "all": {
+          "climatology": {
+            "n_months": 148,
+            "log_loss": 0.6901136405157013,
+            "brier": 0.248030003751796,
+            "skill_vs_climatology": 0.0,
+            "skill_vs_climatology_ci_low": 0.0,
+            "skill_vs_climatology_ci_high": 0.0,
+            "auc": 0.44592048238175996,
+            "accuracy": 0.5878378378378378,
+            "expected_calibration_error": 0.05921532735468267,
+            "calibration_table": [
+              {
+                "bin": "(0.2, 0.3]",
+                "n": 7,
+                "mean_p": 0.29350305530008614,
+                "mean_y": 0.42857142857142855
+              },
+              {
+                "bin": "(0.3, 0.4]",
+                "n": 104,
+                "mean_p": 0.36241236934896714,
+                "mean_y": 0.4230769230769231
+              },
+              {
+                "bin": "(0.4, 0.5]",
+                "n": 37,
+                "mean_p": 0.41916962832124927,
+                "mean_y": 0.3783783783783784
+              }
+            ],
+            "flip_rate_per_year": 0.0,
+            "mean_regime_duration_months": 148.0
+          },
+          "persistence": {
+            "n_months": 148,
+            "log_loss": 0.4362595920132096,
+            "brier": 0.1322325188570224,
+            "skill_vs_climatology": 0.36784383556423284,
+            "skill_vs_climatology_ci_low": 0.2630727316606263,
+            "skill_vs_climatology_ci_high": 0.5123096408107513,
+            "auc": 0.8130770680233653,
+            "accuracy": 0.8513513513513513,
+            "expected_calibration_error": 0.052257412762219374,
+            "calibration_table": [
+              {
+                "bin": "(0.1, 0.2]",
+                "n": 87,
+                "mean_p": 0.15015400246712768,
+                "mean_y": 0.12643678160919541
+              },
+              {
+                "bin": "(0.6, 0.7]",
+                "n": 15,
+                "mean_p": 0.6805532030017576,
+                "mean_y": 0.9333333333333333
+              },
+              {
+                "bin": "(0.7, 0.8]",
+                "n": 39,
+                "mean_p": 0.7634122932474191,
+                "mean_y": 0.7948717948717948
+              },
+              {
+                "bin": "(0.8, 0.9]",
+                "n": 7,
+                "mean_p": 0.8074394794062958,
+                "mean_y": 0.7142857142857143
+              }
+            ],
+            "flip_rate_per_year": 1.7027027027027026,
+            "mean_regime_duration_months": 6.7272727272727275
+          },
+          "rule": {
+            "n_months": 148,
+            "log_loss": 0.5590928304646475,
+            "brier": 0.18541855520531866,
+            "skill_vs_climatology": 0.18985396369378504,
+            "skill_vs_climatology_ci_low": 0.11305052320264981,
+            "skill_vs_climatology_ci_high": 0.25640258504714514,
+            "auc": 0.8434143583945731,
+            "accuracy": 0.7162162162162162,
+            "expected_calibration_error": 0.14323087608427393,
+            "calibration_table": [
+              {
+                "bin": "(-0.001, 0.1]",
+                "n": 4,
+                "mean_p": 0.009274779328336247,
+                "mean_y": 0.25
+              },
+              {
+                "bin": "(0.1, 0.2]",
+                "n": 7,
+                "mean_p": 0.1772449074150398,
+                "mean_y": 0.14285714285714285
+              },
+              {
+                "bin": "(0.2, 0.3]",
+                "n": 39,
+                "mean_p": 0.262856940594312,
+                "mean_y": 0.05128205128205128
+              },
+              {
+                "bin": "(0.3, 0.4]",
+                "n": 43,
+                "mean_p": 0.3487068460325336,
+                "mean_y": 0.3488372093023256
+              },
+              {
+                "bin": "(0.4, 0.5]",
+                "n": 26,
+                "mean_p": 0.44722603672950684,
+                "mean_y": 0.6923076923076923
+              },
+              {
+                "bin": "(0.5, 0.6]",
+                "n": 12,
+                "mean_p": 0.5374869125775689,
+                "mean_y": 0.9166666666666666
+              },
+              {
+                "bin": "(0.6, 0.7]",
+                "n": 10,
+                "mean_p": 0.6518001891898084,
+                "mean_y": 0.7
+              },
+              {
+                "bin": "(0.7, 0.8]",
+                "n": 5,
+                "mean_p": 0.7537138296213329,
+                "mean_y": 0.8
+              },
+              {
+                "bin": "(0.9, 1.0]",
+                "n": 2,
+                "mean_p": 0.9490904659979342,
+                "mean_y": 1.0
+              }
+            ],
+            "flip_rate_per_year": 1.7027027027027026,
+            "mean_regime_duration_months": 6.7272727272727275
+          },
+          "logistic": {
+            "n_months": 148,
+            "log_loss": 0.7133130825774116,
+            "brier": 0.21267934453084034,
+            "skill_vs_climatology": -0.0336168432265358,
+            "skill_vs_climatology_ci_low": -0.3336238882971112,
+            "skill_vs_climatology_ci_high": 0.17976967886735593,
+            "auc": 0.7100056529112493,
+            "accuracy": 0.6959459459459459,
+            "expected_calibration_error": 0.0895343349188093,
+            "calibration_table": [
+              {
+                "bin": "(-0.001, 0.1]",
+                "n": 11,
+                "mean_p": 0.04209716009317063,
+                "mean_y": 0.36363636363636365
+              },
+              {
+                "bin": "(0.1, 0.2]",
+                "n": 20,
+                "mean_p": 0.15192840806031777,
+                "mean_y": 0.15
+              },
+              {
+                "bin": "(0.2, 0.3]",
+                "n": 29,
+                "mean_p": 0.2559393693047393,
+                "mean_y": 0.2413793103448276
+              },
+              {
+                "bin": "(0.3, 0.4]",
+                "n": 23,
+                "mean_p": 0.346093411613808,
+                "mean_y": 0.391304347826087
+              },
+              {
+                "bin": "(0.4, 0.5]",
+                "n": 21,
+                "mean_p": 0.45424430602744326,
+                "mean_y": 0.38095238095238093
+              },
+              {
+                "bin": "(0.5, 0.6]",
+                "n": 17,
+                "mean_p": 0.5578594380404724,
+                "mean_y": 0.5882352941176471
+              },
+              {
+                "bin": "(0.6, 0.7]",
+                "n": 9,
+                "mean_p": 0.6650077417461583,
+                "mean_y": 0.4444444444444444
+              },
+              {
+                "bin": "(0.7, 0.8]",
+                "n": 7,
+                "mean_p": 0.7383134571110496,
+                "mean_y": 1.0
+              },
+              {
+                "bin": "(0.8, 0.9]",
+                "n": 3,
+                "mean_p": 0.8502009562751992,
+                "mean_y": 1.0
+              },
+              {
+                "bin": "(0.9, 1.0]",
+                "n": 8,
+                "mean_p": 0.9864620422602106,
+                "mean_y": 0.75
+              }
+            ],
+            "flip_rate_per_year": 2.675675675675676,
+            "mean_regime_duration_months": 4.352941176470588
+          },
+          "hmm_current": {
+            "n_months": 148,
+            "log_loss": 5.289768524452259,
+            "brier": 0.574323057000627,
+            "skill_vs_climatology": -6.665068785626919,
+            "skill_vs_climatology_ci_low": -9.348729514887486,
+            "skill_vs_climatology_ci_high": -4.7792162969805085,
+            "auc": 0.4207650273224044,
+            "accuracy": 0.42567567567567566,
+            "expected_calibration_error": 0.5743176087809372,
+            "calibration_table": [
+              {
+                "bin": "(-0.001, 0.1]",
+                "n": 56,
+                "mean_p": 1.4513867165846464e-06,
+                "mean_y": 0.48214285714285715
+              },
+              {
+                "bin": "(0.9, 1.0]",
+                "n": 92,
+                "mean_p": 0.9999900801873352,
+                "mean_y": 0.3695652173913043
+              }
+            ],
+            "flip_rate_per_year": 0.40540540540540543,
+            "mean_regime_duration_months": 24.666666666666668
+          }
+        }
+      },
+      "detection_lag_months": {
+        "climatology": [
+          0
+        ],
+        "persistence": [
+          0
+        ],
+        "rule": [
+          0
+        ],
+        "logistic": [
+          0
+        ],
+        "hmm_current": [
+          2
+        ]
+      }
+    },
+    "inflation": {
+      "coverage": {
+        "climatology": {
+          "n_months_available": 222,
+          "n_months_in_comparison": 204
+        },
+        "persistence": {
+          "n_months_available": 222,
+          "n_months_in_comparison": 204
+        },
+        "rule": {
+          "n_months_available": 222,
+          "n_months_in_comparison": 204
+        },
+        "logistic": {
+          "n_months_available": 222,
+          "n_months_in_comparison": 204
+        },
+        "hmm_current": {
+          "n_months_available": 204,
+          "n_months_in_comparison": 204
+        }
+      },
+      "skipped_folds": {
+        "climatology": [],
+        "persistence": [],
+        "rule": [],
+        "logistic": [],
+        "hmm_current": [
+          {
+            "fold_id": 17,
+            "train_end": "2025-03-31",
+            "test_start": "2025-04-30",
+            "test_end": "2026-03-31",
+            "reason": "no restart out of 10 passed sanity checks (composite separation > 0.1, expected state duration > 2.0 months) \u2014 this feature set may not show a clear two-regime structure over this window"
+          },
+          {
+            "fold_id": 18,
+            "train_end": "2026-03-31",
+            "test_start": "2026-04-30",
+            "test_end": "2026-09-30",
+            "reason": "no restart out of 10 passed sanity checks (composite separation > 0.1, expected state duration > 2.0 months) \u2014 this feature set may not show a clear two-regime structure over this window"
+          }
+        ]
+      },
+      "occupancy": {
+        "overall": {
+          "DOWN": {
+            "n_months": 52,
+            "fraction": 0.2549019607843137,
+            "first_date": "2008-08-31",
+            "last_date": "2024-05-31"
+          },
+          "UP": {
+            "n_months": 152,
+            "fraction": 0.7450980392156863,
+            "first_date": "2008-04-30",
+            "last_date": "2025-03-31"
+          }
+        },
+        "by_fold": [
+          {
+            "fold_id": 0,
+            "test_start": "2008-04-30",
+            "test_end": "2009-03-31",
+            "occupancy": {
+              "DOWN": {
+                "n_months": 3,
+                "fraction": 0.25,
+                "first_date": "2008-08-31",
+                "last_date": "2008-12-31"
+              },
+              "UP": {
+                "n_months": 9,
+                "fraction": 0.75,
+                "first_date": "2008-04-30",
+                "last_date": "2009-03-31"
+              }
+            },
+            "state_means": {
+              "UP": {
+                "cpilfesl_3m_annualized_change": -0.002530578537422618,
+                "t10yie_1m_change": 0.20082613729135756,
+                "t10yie_3m_change": 0.3090369673248334,
+                "dfii10_1m_change": 0.02073496751126765,
+                "dcoilwtico_3m_change": 0.31129523306408713
+              },
+              "DOWN": {
+                "cpilfesl_3m_annualized_change": 0.009975162539535608,
+                "t10yie_1m_change": -0.7916266308465624,
+                "t10yie_3m_change": -1.2181775567165005,
+                "dfii10_1m_change": -0.08173414423564977,
+                "dcoilwtico_3m_change": -1.227079302887741
+              }
+            }
+          },
+          {
+            "fold_id": 1,
+            "test_start": "2009-04-30",
+            "test_end": "2010-03-31",
+            "occupancy": {
+              "DOWN": {
+                "n_months": 7,
+                "fraction": 0.5833333333333334,
+                "first_date": "2009-04-30",
+                "last_date": "2010-03-31"
+              },
+              "UP": {
+                "n_months": 5,
+                "fraction": 0.4166666666666667,
+                "first_date": "2009-07-31",
+                "last_date": "2009-11-30"
+              }
+            },
+            "state_means": {
+              "UP": {
+                "cpilfesl_3m_annualized_change": 0.2215835771509187,
+                "t10yie_1m_change": 0.01694042757002174,
+                "t10yie_3m_change": 0.09199918214040934,
+                "dfii10_1m_change": 0.014353586674431386,
+                "dcoilwtico_3m_change": 0.28500903815194634
+              },
+              "DOWN": {
+                "cpilfesl_3m_annualized_change": -0.9086821549480805,
+                "t10yie_1m_change": -0.06947023975330933,
+                "t10yie_3m_change": -0.37727532047139095,
+                "dfii10_1m_change": -0.05886197992766461,
+                "dcoilwtico_3m_change": -1.1687807837455393
+              }
+            }
+          },
+          {
+            "fold_id": 2,
+            "test_start": "2010-04-30",
+            "test_end": "2011-03-31",
+            "occupancy": {
+              "UP": {
+                "n_months": 12,
+                "fraction": 1.0,
+                "first_date": "2010-04-30",
+                "last_date": "2011-03-31"
+              }
+            },
+            "state_means": {
+              "UP": {
+                "cpilfesl_3m_annualized_change": 0.10500874696881905,
+                "t10yie_1m_change": 0.06983554656803696,
+                "t10yie_3m_change": 0.13398620180318407,
+                "dfii10_1m_change": 0.021926141220921732,
+                "dcoilwtico_3m_change": 0.22715297996932993
+              },
+              "DOWN": {
+                "cpilfesl_3m_annualized_change": -0.8506440464031109,
+                "t10yie_1m_change": -0.5657166058085229,
+                "t10yie_3m_change": -1.0853816291883462,
+                "dfii10_1m_change": -0.1776170274245025,
+                "dcoilwtico_3m_change": -1.8400974738896092
+              }
+            }
+          },
+          {
+            "fold_id": 3,
+            "test_start": "2011-04-30",
+            "test_end": "2012-03-31",
+            "occupancy": {
+              "DOWN": {
+                "n_months": 2,
+                "fraction": 0.16666666666666666,
+                "first_date": "2011-09-30",
+                "last_date": "2011-10-31"
+              },
+              "UP": {
+                "n_months": 10,
+                "fraction": 0.8333333333333334,
+                "first_date": "2011-04-30",
+                "last_date": "2012-03-31"
+              }
+            },
+            "state_means": {
+              "UP": {
+                "cpilfesl_3m_annualized_change": 0.36054766950675543,
+                "t10yie_1m_change": -0.018413566733171335,
+                "t10yie_3m_change": 0.03451744212455588,
+                "dfii10_1m_change": -0.00043299728752109267,
+                "dcoilwtico_3m_change": 0.23202501437020354
+              },
+              "DOWN": {
+                "cpilfesl_3m_annualized_change": -0.7794315784441583,
+                "t10yie_1m_change": 0.03980642948894767,
+                "t10yie_3m_change": -0.07461977062783262,
+                "dfii10_1m_change": 0.0009360530875930777,
+                "dcoilwtico_3m_change": -0.5015914357080515
+              }
+            }
+          },
+          {
+            "fold_id": 4,
+            "test_start": "2012-04-30",
+            "test_end": "2013-03-31",
+            "occupancy": {
+              "UP": {
+                "n_months": 12,
+                "fraction": 1.0,
+                "first_date": "2012-04-30",
+                "last_date": "2013-03-31"
+              }
+            },
+            "state_means": {
+              "UP": {
+                "cpilfesl_3m_annualized_change": 0.2953683471597251,
+                "t10yie_1m_change": 0.011627281323084259,
+                "t10yie_3m_change": 0.07396274353715084,
+                "dfii10_1m_change": -0.0017974212006600346,
+                "dcoilwtico_3m_change": 0.2430612007520585
+              },
+              "DOWN": {
+                "cpilfesl_3m_annualized_change": -0.6582719627312591,
+                "t10yie_1m_change": -0.025913112800930303,
+                "t10yie_3m_change": -0.1648368920548591,
+                "dfii10_1m_change": 0.004005818473749345,
+                "dcoilwtico_3m_change": -0.5416977655914881
+              }
+            }
+          },
+          {
+            "fold_id": 5,
+            "test_start": "2013-04-30",
+            "test_end": "2014-03-31",
+            "occupancy": {
+              "DOWN": {
+                "n_months": 3,
+                "fraction": 0.25,
+                "first_date": "2013-05-31",
+                "last_date": "2013-07-31"
+              },
+              "UP": {
+                "n_months": 9,
+                "fraction": 0.75,
+                "first_date": "2013-04-30",
+                "last_date": "2014-03-31"
+              }
+            },
+            "state_means": {
+              "UP": {
+                "cpilfesl_3m_annualized_change": 0.26640705168557083,
+                "t10yie_1m_change": 0.012647421407203534,
+                "t10yie_3m_change": 0.07292209145346602,
+                "dfii10_1m_change": -0.006897882214063817,
+                "dcoilwtico_3m_change": 0.200105867160478
+              },
+              "DOWN": {
+                "cpilfesl_3m_annualized_change": -0.6851206334501928,
+                "t10yie_1m_change": -0.03252545047584903,
+                "t10yie_3m_change": -0.1875341856494046,
+                "dfii10_1m_change": 0.017739325599924423,
+                "dcoilwtico_3m_change": -0.5146134743756712
+              }
+            }
+          },
+          {
+            "fold_id": 6,
+            "test_start": "2014-04-30",
+            "test_end": "2015-03-31",
+            "occupancy": {
+              "DOWN": {
+                "n_months": 5,
+                "fraction": 0.4166666666666667,
+                "first_date": "2014-10-31",
+                "last_date": "2015-02-28"
+              },
+              "UP": {
+                "n_months": 7,
+                "fraction": 0.5833333333333334,
+                "first_date": "2014-04-30",
+                "last_date": "2015-03-31"
+              }
+            },
+            "state_means": {
+              "UP": {
+                "cpilfesl_3m_annualized_change": 0.25134123622114923,
+                "t10yie_1m_change": 0.024205964265882642,
+                "t10yie_3m_change": 0.08135111050630521,
+                "dfii10_1m_change": -0.04141731516743515,
+                "dcoilwtico_3m_change": 0.18383034402868131
+              },
+              "DOWN": {
+                "cpilfesl_3m_annualized_change": -0.6655625046493444,
+                "t10yie_1m_change": -0.0640984441967233,
+                "t10yie_3m_change": -0.21542127220597723,
+                "dfii10_1m_change": 0.10967484855702557,
+                "dcoilwtico_3m_change": -0.48679073136502293
+              }
+            }
+          },
+          {
+            "fold_id": 7,
+            "test_start": "2015-04-30",
+            "test_end": "2016-03-31",
+            "occupancy": {
+              "DOWN": {
+                "n_months": 1,
+                "fraction": 0.08333333333333333,
+                "first_date": "2015-09-30",
+                "last_date": "2015-09-30"
+              },
+              "UP": {
+                "n_months": 11,
+                "fraction": 0.9166666666666666,
+                "first_date": "2015-04-30",
+                "last_date": "2016-03-31"
+              }
+            },
+            "state_means": {
+              "UP": {
+                "cpilfesl_3m_annualized_change": 0.2815298290806505,
+                "t10yie_1m_change": 0.03517337341823522,
+                "t10yie_3m_change": 0.10928358620106127,
+                "dfii10_1m_change": -0.04106917049270127,
+                "dcoilwtico_3m_change": 0.23649270076282267
+              },
+              "DOWN": {
+                "cpilfesl_3m_annualized_change": -0.6688472051711045,
+                "t10yie_1m_change": -0.08356348094284441,
+                "t10yie_3m_change": -0.2596315333275621,
+                "dfii10_1m_change": 0.09757047767350156,
+                "dcoilwtico_3m_change": -0.5618498134464691
+              }
+            }
+          },
+          {
+            "fold_id": 8,
+            "test_start": "2016-04-30",
+            "test_end": "2017-03-31",
+            "occupancy": {
+              "UP": {
+                "n_months": 12,
+                "fraction": 1.0,
+                "first_date": "2016-04-30",
+                "last_date": "2017-03-31"
+              }
+            },
+            "state_means": {
+              "UP": {
+                "cpilfesl_3m_annualized_change": 0.2761541045968275,
+                "t10yie_1m_change": 0.034795708628696964,
+                "t10yie_3m_change": 0.10113512256386675,
+                "dfii10_1m_change": -0.03707431743426851,
+                "dcoilwtico_3m_change": 0.19840770951601586
+              },
+              "DOWN": {
+                "cpilfesl_3m_annualized_change": -0.7343427355127324,
+                "t10yie_1m_change": -0.09252795969051941,
+                "t10yie_3m_change": -0.26893622554840313,
+                "dfii10_1m_change": 0.0985871845783267,
+                "dcoilwtico_3m_change": -0.5276012839480541
+              }
+            }
+          },
+          {
+            "fold_id": 9,
+            "test_start": "2017-04-30",
+            "test_end": "2018-03-31",
+            "occupancy": {
+              "DOWN": {
+                "n_months": 1,
+                "fraction": 0.08333333333333333,
+                "first_date": "2017-06-30",
+                "last_date": "2017-06-30"
+              },
+              "UP": {
+                "n_months": 11,
+                "fraction": 0.9166666666666666,
+                "first_date": "2017-04-30",
+                "last_date": "2018-03-31"
+              }
+            },
+            "state_means": {
+              "UP": {
+                "cpilfesl_3m_annualized_change": 0.26391851813418815,
+                "t10yie_1m_change": 0.03669613370715602,
+                "t10yie_3m_change": 0.10633825991400711,
+                "dfii10_1m_change": -0.030421488450311215,
+                "dcoilwtico_3m_change": 0.19500408423790977
+              },
+              "DOWN": {
+                "cpilfesl_3m_annualized_change": -0.7864054337666859,
+                "t10yie_1m_change": -0.10934450204386374,
+                "t10yie_3m_change": -0.31685910486640395,
+                "dfii10_1m_change": 0.09064776503644932,
+                "dcoilwtico_3m_change": -0.5810591561953673
+              }
+            }
+          },
+          {
+            "fold_id": 10,
+            "test_start": "2018-04-30",
+            "test_end": "2019-03-31",
+            "occupancy": {
+              "DOWN": {
+                "n_months": 2,
+                "fraction": 0.16666666666666666,
+                "first_date": "2018-12-31",
+                "last_date": "2019-01-31"
+              },
+              "UP": {
+                "n_months": 10,
+                "fraction": 0.8333333333333334,
+                "first_date": "2018-04-30",
+                "last_date": "2019-03-31"
+              }
+            },
+            "state_means": {
+              "UP": {
+                "cpilfesl_3m_annualized_change": 0.24980761038455068,
+                "t10yie_1m_change": 0.03973822940522056,
+                "t10yie_3m_change": 0.10812432075022915,
+                "dfii10_1m_change": -0.029187992847890493,
+                "dcoilwtico_3m_change": 0.19416424426620435
+              },
+              "DOWN": {
+                "cpilfesl_3m_annualized_change": -0.7818873935934234,
+                "t10yie_1m_change": -0.12437899937408438,
+                "t10yie_3m_change": -0.33842461086478304,
+                "dfii10_1m_change": 0.09135719931400305,
+                "dcoilwtico_3m_change": -0.6077259801838596
+              }
+            }
+          },
+          {
+            "fold_id": 11,
+            "test_start": "2019-04-30",
+            "test_end": "2020-03-31",
+            "occupancy": {
+              "DOWN": {
+                "n_months": 1,
+                "fraction": 0.08333333333333333,
+                "first_date": "2020-03-31",
+                "last_date": "2020-03-31"
+              },
+              "UP": {
+                "n_months": 11,
+                "fraction": 0.9166666666666666,
+                "first_date": "2019-04-30",
+                "last_date": "2020-02-29"
+              }
+            },
+            "state_means": {
+              "UP": {
+                "cpilfesl_3m_annualized_change": 0.24825888726926168,
+                "t10yie_1m_change": 0.04918806493947491,
+                "t10yie_3m_change": 0.11485591746839663,
+                "dfii10_1m_change": -0.027152138665296935,
+                "dcoilwtico_3m_change": 0.2028605907228434
+              },
+              "DOWN": {
+                "cpilfesl_3m_annualized_change": -0.7789105132038739,
+                "t10yie_1m_change": -0.15432720788749016,
+                "t10yie_3m_change": -0.36035963346111277,
+                "dfii10_1m_change": 0.08518964414529369,
+                "dcoilwtico_3m_change": -0.6364736770023391
+              }
+            }
+          },
+          {
+            "fold_id": 12,
+            "test_start": "2020-04-30",
+            "test_end": "2021-03-31",
+            "occupancy": {
+              "DOWN": {
+                "n_months": 9,
+                "fraction": 0.75,
+                "first_date": "2020-04-30",
+                "last_date": "2021-03-31"
+              },
+              "UP": {
+                "n_months": 3,
+                "fraction": 0.25,
+                "first_date": "2020-11-30",
+                "last_date": "2021-01-31"
+              }
+            },
+            "state_means": {
+              "UP": {
+                "cpilfesl_3m_annualized_change": 0.2332036257838285,
+                "t10yie_1m_change": 0.06093625684941141,
+                "t10yie_3m_change": 0.11541600247505852,
+                "dfii10_1m_change": -0.03033796201128805,
+                "dcoilwtico_3m_change": 0.20134801348574383
+              },
+              "DOWN": {
+                "cpilfesl_3m_annualized_change": -0.770131536226586,
+                "t10yie_1m_change": -0.20123586390050674,
+                "t10yie_3m_change": -0.3811497483904377,
+                "dfii10_1m_change": 0.10018807045220036,
+                "dcoilwtico_3m_change": -0.6649315782323505
+              }
+            }
+          },
+          {
+            "fold_id": 13,
+            "test_start": "2021-04-30",
+            "test_end": "2022-03-31",
+            "occupancy": {
+              "DOWN": {
+                "n_months": 9,
+                "fraction": 0.75,
+                "first_date": "2021-05-31",
+                "last_date": "2022-03-31"
+              },
+              "UP": {
+                "n_months": 3,
+                "fraction": 0.25,
+                "first_date": "2021-04-30",
+                "last_date": "2021-11-30"
+              }
+            },
+            "state_means": {
+              "UP": {
+                "cpilfesl_3m_annualized_change": 0.20876171474822494,
+                "t10yie_1m_change": 0.02250870660356333,
+                "t10yie_3m_change": 0.06572906111010214,
+                "dfii10_1m_change": -0.026642697848304073,
+                "dcoilwtico_3m_change": 0.10418187843358982
+              },
+              "DOWN": {
+                "cpilfesl_3m_annualized_change": -0.5957225348387515,
+                "t10yie_1m_change": -0.06423085655330155,
+                "t10yie_3m_change": -0.18756448204261678,
+                "dfii10_1m_change": 0.07602761606111333,
+                "dcoilwtico_3m_change": -0.29729346101401877
+              }
+            }
+          },
+          {
+            "fold_id": 14,
+            "test_start": "2022-04-30",
+            "test_end": "2023-03-31",
+            "occupancy": {
+              "UP": {
+                "n_months": 12,
+                "fraction": 1.0,
+                "first_date": "2022-04-30",
+                "last_date": "2023-03-31"
+              }
+            },
+            "state_means": {
+              "UP": {
+                "cpilfesl_3m_annualized_change": 0.9235203614880496,
+                "t10yie_1m_change": -0.002845049725464922,
+                "t10yie_3m_change": -0.18088895486410306,
+                "dfii10_1m_change": 0.02839470080265304,
+                "dcoilwtico_3m_change": -0.08377937615286143
+              },
+              "DOWN": {
+                "cpilfesl_3m_annualized_change": -0.13644119835423232,
+                "t10yie_1m_change": 0.0004203285710991624,
+                "t10yie_3m_change": 0.026724592981292507,
+                "dfii10_1m_change": -0.0041950423249810815,
+                "dcoilwtico_3m_change": 0.012377592261471677
+              }
+            }
+          },
+          {
+            "fold_id": 15,
+            "test_start": "2023-04-30",
+            "test_end": "2024-03-31",
+            "occupancy": {
+              "DOWN": {
+                "n_months": 7,
+                "fraction": 0.5833333333333334,
+                "first_date": "2023-04-30",
+                "last_date": "2024-03-31"
+              },
+              "UP": {
+                "n_months": 5,
+                "fraction": 0.4166666666666667,
+                "first_date": "2023-09-30",
+                "last_date": "2024-02-29"
+              }
+            },
+            "state_means": {
+              "UP": {
+                "cpilfesl_3m_annualized_change": -0.1578067115073293,
+                "t10yie_1m_change": 0.04236491474861003,
+                "t10yie_3m_change": 0.09531708356806834,
+                "dfii10_1m_change": -0.06208084548201834,
+                "dcoilwtico_3m_change": 0.10080245472669673
+              },
+              "DOWN": {
+                "cpilfesl_3m_annualized_change": 0.3988491260829166,
+                "t10yie_1m_change": -0.10707535226263735,
+                "t10yie_3m_change": -0.24090949693307406,
+                "dfii10_1m_change": 0.15690645049555454,
+                "dcoilwtico_3m_change": -0.2547735174931699
+              }
+            }
+          },
+          {
+            "fold_id": 16,
+            "test_start": "2024-04-30",
+            "test_end": "2025-03-31",
+            "occupancy": {
+              "DOWN": {
+                "n_months": 2,
+                "fraction": 0.16666666666666666,
+                "first_date": "2024-04-30",
+                "last_date": "2024-05-31"
+              },
+              "UP": {
+                "n_months": 10,
+                "fraction": 0.8333333333333334,
+                "first_date": "2024-06-30",
+                "last_date": "2025-03-31"
+              }
+            },
+            "state_means": {
+              "UP": {
+                "cpilfesl_3m_annualized_change": -0.16309438361894735,
+                "t10yie_1m_change": 0.0422012873958469,
+                "t10yie_3m_change": 0.09720689046238076,
+                "dfii10_1m_change": -0.06331184379841083,
+                "dcoilwtico_3m_change": 0.1079988403857054
+              },
+              "DOWN": {
+                "cpilfesl_3m_annualized_change": 0.3955811009927961,
+                "t10yie_1m_change": -0.10235810308690138,
+                "t10yie_3m_change": -0.23577273416743222,
+                "dfii10_1m_change": 0.1535611976324837,
+                "dcoilwtico_3m_change": -0.2619483224237694
+              }
+            }
+          }
+        ]
+      },
+      "splits": {
+        "dev": {
+          "climatology": {
+            "n_months": 105,
+            "log_loss": 0.6959877200527076,
+            "brier": 0.2513975399686316,
+            "skill_vs_climatology": 0.0,
+            "skill_vs_climatology_ci_low": 0.0,
+            "skill_vs_climatology_ci_high": 0.0,
+            "auc": 0.4291180758017493,
+            "accuracy": 0.5333333333333333,
+            "expected_calibration_error": 0.007875259626126674,
+            "calibration_table": [
+              {
+                "bin": "(0.5, 0.6]",
+                "n": 105,
+                "mean_p": 0.54120859295946,
+                "mean_y": 0.5333333333333333
+              }
+            ],
+            "flip_rate_per_year": 0.0,
+            "mean_regime_duration_months": 105.0
+          },
+          "persistence": {
+            "n_months": 105,
+            "log_loss": 0.4917059759096225,
+            "brier": 0.15500029927037923,
+            "skill_vs_climatology": 0.2935134317134427,
+            "skill_vs_climatology_ci_low": 0.15645312951620513,
+            "skill_vs_climatology_ci_high": 0.4012096032739246,
+            "auc": 0.7561953352769679,
+            "accuracy": 0.819047619047619,
+            "expected_calibration_error": 0.065811364979035,
+            "calibration_table": [
+              {
+                "bin": "(0.2, 0.3]",
+                "n": 43,
+                "mean_p": 0.24832826421686074,
+                "mean_y": 0.20930232558139536
+              },
+              {
+                "bin": "(0.3, 0.4]",
+                "n": 7,
+                "mean_p": 0.3155390337278944,
+                "mean_y": 0.14285714285714285
+              },
+              {
+                "bin": "(0.7, 0.8]",
+                "n": 48,
+                "mean_p": 0.7839675522421751,
+                "mean_y": 0.8541666666666666
+              },
+              {
+                "bin": "(0.8, 0.9]",
+                "n": 7,
+                "mean_p": 0.8076781761432583,
+                "mean_y": 0.7142857142857143
+              }
+            ],
+            "flip_rate_per_year": 2.1714285714285713,
+            "mean_regime_duration_months": 5.25
+          },
+          "rule": {
+            "n_months": 105,
+            "log_loss": 0.5518997143125887,
+            "brier": 0.1890163143959911,
+            "skill_vs_climatology": 0.20702664944894011,
+            "skill_vs_climatology_ci_low": 0.09224559437321954,
+            "skill_vs_climatology_ci_high": 0.32116479290853583,
+            "auc": 0.7933673469387754,
+            "accuracy": 0.6952380952380952,
+            "expected_calibration_error": 0.10510188432412845,
+            "calibration_table": [
+              {
+                "bin": "(-0.001, 0.1]",
+                "n": 5,
+                "mean_p": 0.029720775661496425,
+                "mean_y": 0.0
+              },
+              {
+                "bin": "(0.1, 0.2]",
+                "n": 7,
+                "mean_p": 0.13718472885176622,
+                "mean_y": 0.0
+              },
+              {
+                "bin": "(0.2, 0.3]",
+                "n": 11,
+                "mean_p": 0.2455521536481592,
+                "mean_y": 0.18181818181818182
+              },
+              {
+                "bin": "(0.3, 0.4]",
+                "n": 19,
+                "mean_p": 0.35360833298767264,
+                "mean_y": 0.5263157894736842
+              },
+              {
+                "bin": "(0.4, 0.5]",
+                "n": 9,
+                "mean_p": 0.4481626466349464,
+                "mean_y": 0.5555555555555556
+              },
+              {
+                "bin": "(0.5, 0.6]",
+                "n": 19,
+                "mean_p": 0.5437922176573057,
+                "mean_y": 0.5789473684210527
+              },
+              {
+                "bin": "(0.6, 0.7]",
+                "n": 24,
+                "mean_p": 0.6435009037693568,
+                "mean_y": 0.7916666666666666
+              },
+              {
+                "bin": "(0.7, 0.8]",
+                "n": 7,
+                "mean_p": 0.7545693200571507,
+                "mean_y": 0.7142857142857143
+              },
+              {
+                "bin": "(0.8, 0.9]",
+                "n": 2,
+                "mean_p": 0.8333933094906381,
+                "mean_y": 1.0
+              },
+              {
+                "bin": "(0.9, 1.0]",
+                "n": 2,
+                "mean_p": 0.9306877326756089,
+                "mean_y": 1.0
+              }
+            ],
+            "flip_rate_per_year": 4.228571428571429,
+            "mean_regime_duration_months": 2.763157894736842
+          },
+          "logistic": {
+            "n_months": 105,
+            "log_loss": 0.5179623923980775,
+            "brier": 0.17556715855868366,
+            "skill_vs_climatology": 0.2557880297674622,
+            "skill_vs_climatology_ci_low": 0.09234586069714293,
+            "skill_vs_climatology_ci_high": 0.3906642657050766,
+            "auc": 0.8196064139941691,
+            "accuracy": 0.7238095238095238,
+            "expected_calibration_error": 0.07677471914718509,
+            "calibration_table": [
+              {
+                "bin": "(-0.001, 0.1]",
+                "n": 15,
+                "mean_p": 0.04361657673266605,
+                "mean_y": 0.0
+              },
+              {
+                "bin": "(0.1, 0.2]",
+                "n": 6,
+                "mean_p": 0.1551790639812992,
+                "mean_y": 0.3333333333333333
+              },
+              {
+                "bin": "(0.2, 0.3]",
+                "n": 14,
+                "mean_p": 0.24540475478554297,
+                "mean_y": 0.2857142857142857
+              },
+              {
+                "bin": "(0.3, 0.4]",
+                "n": 8,
+                "mean_p": 0.3454148081358836,
+                "mean_y": 0.5
+              },
+              {
+                "bin": "(0.4, 0.5]",
+                "n": 9,
+                "mean_p": 0.4423130932944558,
+                "mean_y": 0.6666666666666666
+              },
+              {
+                "bin": "(0.5, 0.6]",
+                "n": 8,
+                "mean_p": 0.5382501271705775,
+                "mean_y": 0.625
+              },
+              {
+                "bin": "(0.6, 0.7]",
+                "n": 14,
+                "mean_p": 0.6420304892414673,
+                "mean_y": 0.6428571428571429
+              },
+              {
+                "bin": "(0.7, 0.8]",
+                "n": 16,
+                "mean_p": 0.7320276211812787,
+                "mean_y": 0.8125
+              },
+              {
+                "bin": "(0.8, 0.9]",
+                "n": 6,
+                "mean_p": 0.8440977041857506,
+                "mean_y": 0.8333333333333334
+              },
+              {
+                "bin": "(0.9, 1.0]",
+                "n": 9,
+                "mean_p": 0.9400286328464588,
+                "mean_y": 0.8888888888888888
+              }
+            ],
+            "flip_rate_per_year": 3.3142857142857145,
+            "mean_regime_duration_months": 3.5
+          },
+          "hmm_current": {
+            "n_months": 105,
+            "log_loss": 1.7856907082445201,
+            "brier": 0.3301461371933511,
+            "skill_vs_climatology": -1.5656928373812238,
+            "skill_vs_climatology_ci_low": -2.612375616544039,
+            "skill_vs_climatology_ci_high": -0.6503352350851535,
+            "auc": 0.6583454810495627,
+            "accuracy": 0.6,
+            "expected_calibration_error": 0.3521678253495767,
+            "calibration_table": [
+              {
+                "bin": "(-0.001, 0.1]",
+                "n": 12,
+                "mean_p": 0.0207250520206939,
+                "mean_y": 0.25
+              },
+              {
+                "bin": "(0.1, 0.2]",
+                "n": 1,
+                "mean_p": 0.16614872697913072,
+                "mean_y": 0.0
+              },
+              {
+                "bin": "(0.2, 0.3]",
+                "n": 3,
+                "mean_p": 0.28242351837837076,
+                "mean_y": 0.0
+              },
+              {
+                "bin": "(0.3, 0.4]",
+                "n": 1,
+                "mean_p": 0.30579030183525124,
+                "mean_y": 1.0
+              },
+              {
+                "bin": "(0.4, 0.5]",
+                "n": 4,
+                "mean_p": 0.4295883686710459,
+                "mean_y": 0.75
+              },
+              {
+                "bin": "(0.5, 0.6]",
+                "n": 3,
+                "mean_p": 0.5658137617976077,
+                "mean_y": 0.0
+              },
+              {
+                "bin": "(0.6, 0.7]",
+                "n": 2,
+                "mean_p": 0.6510746850704963,
+                "mean_y": 0.0
+              },
+              {
+                "bin": "(0.7, 0.8]",
+                "n": 2,
+                "mean_p": 0.7595073463864359,
+                "mean_y": 0.0
+              },
+              {
+                "bin": "(0.8, 0.9]",
+                "n": 5,
+                "mean_p": 0.8622214669308231,
+                "mean_y": 0.4
+              },
+              {
+                "bin": "(0.9, 1.0]",
+                "n": 72,
+                "mean_p": 0.9917685291305316,
+                "mean_y": 0.6527777777777778
+              }
+            ],
+            "flip_rate_per_year": 1.8285714285714285,
+            "mean_regime_duration_months": 6.176470588235294
+          }
+        },
+        "holdout": {
+          "climatology": {
+            "n_months": 99,
+            "log_loss": 0.6914312681076205,
+            "brier": 0.24913339645775492,
+            "skill_vs_climatology": 0.0,
+            "skill_vs_climatology_ci_low": 0.0,
+            "skill_vs_climatology_ci_high": 0.0,
+            "auc": 0.4430041152263375,
+            "accuracy": 0.5454545454545454,
+            "expected_calibration_error": 0.002381507267436911,
+            "calibration_table": [
+              {
+                "bin": "(0.5, 0.6]",
+                "n": 99,
+                "mean_p": 0.5478360527219823,
+                "mean_y": 0.5454545454545454
+              }
+            ],
+            "flip_rate_per_year": 0.0,
+            "mean_regime_duration_months": 99.0
+          },
+          "persistence": {
+            "n_months": 99,
+            "log_loss": 0.46713945986114563,
+            "brier": 0.1450177264061638,
+            "skill_vs_climatology": 0.3243877137062944,
+            "skill_vs_climatology_ci_low": 0.21371532348363245,
+            "skill_vs_climatology_ci_high": 0.46156668402940504,
+            "auc": 0.7683127572016459,
+            "accuracy": 0.8282828282828283,
+            "expected_calibration_error": 0.03305714721655217,
+            "calibration_table": [
+              {
+                "bin": "(0.2, 0.3]",
+                "n": 44,
+                "mean_p": 0.22760047768246225,
+                "mean_y": 0.18181818181818182
+              },
+              {
+                "bin": "(0.7, 0.8]",
+                "n": 3,
+                "mean_p": 0.799290780141844,
+                "mean_y": 1.0
+              },
+              {
+                "bin": "(0.8, 0.9]",
+                "n": 52,
+                "mean_p": 0.8143055981377719,
+                "mean_y": 0.8269230769230769
+              }
+            ],
+            "flip_rate_per_year": 1.9393939393939394,
+            "mean_regime_duration_months": 5.823529411764706
+          },
+          "rule": {
+            "n_months": 99,
+            "log_loss": 0.5468262578124676,
+            "brier": 0.1860041772470546,
+            "skill_vs_climatology": 0.20913866202626696,
+            "skill_vs_climatology_ci_low": 0.11606754557976733,
+            "skill_vs_climatology_ci_high": 0.30322212713611774,
+            "auc": 0.8078189300411522,
+            "accuracy": 0.7070707070707071,
+            "expected_calibration_error": 0.09906639076791308,
+            "calibration_table": [
+              {
+                "bin": "(-0.001, 0.1]",
+                "n": 2,
+                "mean_p": 0.05928972339849316,
+                "mean_y": 0.0
+              },
+              {
+                "bin": "(0.1, 0.2]",
+                "n": 5,
+                "mean_p": 0.14871155372632436,
+                "mean_y": 0.0
+              },
+              {
+                "bin": "(0.2, 0.3]",
+                "n": 4,
+                "mean_p": 0.27127669589222403,
+                "mean_y": 0.5
+              },
+              {
+                "bin": "(0.3, 0.4]",
+                "n": 6,
+                "mean_p": 0.3570107997670057,
+                "mean_y": 0.3333333333333333
+              },
+              {
+                "bin": "(0.4, 0.5]",
+                "n": 13,
+                "mean_p": 0.45729430585247377,
+                "mean_y": 0.23076923076923078
+              },
+              {
+                "bin": "(0.5, 0.6]",
+                "n": 25,
+                "mean_p": 0.5526839132936437,
+                "mean_y": 0.48
+              },
+              {
+                "bin": "(0.6, 0.7]",
+                "n": 16,
+                "mean_p": 0.655926830833086,
+                "mean_y": 0.6875
+              },
+              {
+                "bin": "(0.7, 0.8]",
+                "n": 18,
+                "mean_p": 0.7444826007180196,
+                "mean_y": 0.8333333333333334
+              },
+              {
+                "bin": "(0.8, 0.9]",
+                "n": 3,
+                "mean_p": 0.8419085700368543,
+                "mean_y": 0.6666666666666666
+              },
+              {
+                "bin": "(0.9, 1.0]",
+                "n": 7,
+                "mean_p": 0.9290937081026341,
+                "mean_y": 1.0
+              }
+            ],
+            "flip_rate_per_year": 3.1515151515151514,
+            "mean_regime_duration_months": 3.6666666666666665
+          },
+          "logistic": {
+            "n_months": 99,
+            "log_loss": 0.5859672823655087,
+            "brier": 0.19706957006905498,
+            "skill_vs_climatology": 0.15252996300088706,
+            "skill_vs_climatology_ci_low": -0.13387143748978633,
+            "skill_vs_climatology_ci_high": 0.37340188040142075,
+            "auc": 0.788477366255144,
+            "accuracy": 0.7272727272727273,
+            "expected_calibration_error": 0.12120164270338554,
+            "calibration_table": [
+              {
+                "bin": "(-0.001, 0.1]",
+                "n": 5,
+                "mean_p": 0.02952228419915523,
+                "mean_y": 0.0
+              },
+              {
+                "bin": "(0.1, 0.2]",
+                "n": 2,
+                "mean_p": 0.14380132856244998,
+                "mean_y": 0.0
+              },
+              {
+                "bin": "(0.2, 0.3]",
+                "n": 9,
+                "mean_p": 0.26094184863786807,
+                "mean_y": 0.3333333333333333
+              },
+              {
+                "bin": "(0.3, 0.4]",
+                "n": 8,
+                "mean_p": 0.3598323267327367,
+                "mean_y": 0.25
+              },
+              {
+                "bin": "(0.4, 0.5]",
+                "n": 4,
+                "mean_p": 0.44263045087394914,
+                "mean_y": 0.0
+              },
+              {
+                "bin": "(0.5, 0.6]",
+                "n": 6,
+                "mean_p": 0.5661903634808397,
+                "mean_y": 0.3333333333333333
+              },
+              {
+                "bin": "(0.6, 0.7]",
+                "n": 14,
+                "mean_p": 0.6589692448150594,
+                "mean_y": 0.6428571428571429
+              },
+              {
+                "bin": "(0.7, 0.8]",
+                "n": 12,
+                "mean_p": 0.7461019856970474,
+                "mean_y": 0.5833333333333334
+              },
+              {
+                "bin": "(0.8, 0.9]",
+                "n": 16,
+                "mean_p": 0.8464073030396774,
+                "mean_y": 0.75
+              },
+              {
+                "bin": "(0.9, 1.0]",
+                "n": 23,
+                "mean_p": 0.9628083688957539,
+                "mean_y": 0.8260869565217391
+              }
+            ],
+            "flip_rate_per_year": 2.4242424242424243,
+            "mean_regime_duration_months": 4.714285714285714
+          },
+          "hmm_current": {
+            "n_months": 99,
+            "log_loss": 2.4921238778195685,
+            "brier": 0.42297813419105884,
+            "skill_vs_climatology": -2.60429733622008,
+            "skill_vs_climatology_ci_low": -4.03735514010841,
+            "skill_vs_climatology_ci_high": -1.4627220918519408,
+            "auc": 0.5205761316872428,
+            "accuracy": 0.5353535353535354,
+            "expected_calibration_error": 0.41388907993759094,
+            "calibration_table": [
+              {
+                "bin": "(-0.001, 0.1]",
+                "n": 22,
+                "mean_p": 0.008769173819400804,
+                "mean_y": 0.5454545454545454
+              },
+              {
+                "bin": "(0.1, 0.2]",
+                "n": 4,
+                "mean_p": 0.16004795932164523,
+                "mean_y": 0.5
+              },
+              {
+                "bin": "(0.4, 0.5]",
+                "n": 5,
+                "mean_p": 0.4310284059824042,
+                "mean_y": 0.4
+              },
+              {
+                "bin": "(0.5, 0.6]",
+                "n": 1,
+                "mean_p": 0.567506134867366,
+                "mean_y": 0.0
+              },
+              {
+                "bin": "(0.6, 0.7]",
+                "n": 2,
+                "mean_p": 0.6492542332603404,
+                "mean_y": 0.5
+              },
+              {
+                "bin": "(0.7, 0.8]",
+                "n": 2,
+                "mean_p": 0.7318550977883367,
+                "mean_y": 1.0
+              },
+              {
+                "bin": "(0.8, 0.9]",
+                "n": 7,
+                "mean_p": 0.8465551235852792,
+                "mean_y": 0.42857142857142855
+              },
+              {
+                "bin": "(0.9, 1.0]",
+                "n": 56,
+                "mean_p": 0.9879428620413312,
+                "mean_y": 0.5714285714285714
+              }
+            ],
+            "flip_rate_per_year": 2.1818181818181817,
+            "mean_regime_duration_months": 5.2105263157894735
+          }
+        },
+        "all": {
+          "climatology": {
+            "n_months": 204,
+            "log_loss": 0.6937765007264153,
+            "brier": 0.25029876444129434,
+            "skill_vs_climatology": 0.0,
+            "skill_vs_climatology_ci_low": 0.0,
+            "skill_vs_climatology_ci_high": 0.0,
+            "auc": 0.44695357833655697,
+            "accuracy": 0.5392156862745098,
+            "expected_calibration_error": 0.005209173922644861,
+            "calibration_table": [
+              {
+                "bin": "(0.5, 0.6]",
+                "n": 204,
+                "mean_p": 0.5444248601971546,
+                "mean_y": 0.5392156862745098
+              }
+            ],
+            "flip_rate_per_year": 0.0,
+            "mean_regime_duration_months": 204.0
+          },
+          "persistence": {
+            "n_months": 204,
+            "log_loss": 0.4797839901802145,
+            "brier": 0.15015581538039235,
+            "skill_vs_climatology": 0.30844589045916226,
+            "skill_vs_climatology_ci_low": 0.22933635531826296,
+            "skill_vs_climatology_ci_high": 0.3954837431811963,
+            "auc": 0.7804158607350096,
+            "accuracy": 0.8235294117647058,
+            "expected_calibration_error": 0.043506649172704616,
+            "calibration_table": [
+              {
+                "bin": "(0.2, 0.3]",
+                "n": 87,
+                "mean_p": 0.23784524573969368,
+                "mean_y": 0.19540229885057472
+              },
+              {
+                "bin": "(0.3, 0.4]",
+                "n": 7,
+                "mean_p": 0.3155390337278944,
+                "mean_y": 0.14285714285714285
+              },
+              {
+                "bin": "(0.7, 0.8]",
+                "n": 51,
+                "mean_p": 0.7848689185892144,
+                "mean_y": 0.8627450980392157
+              },
+              {
+                "bin": "(0.8, 0.9]",
+                "n": 59,
+                "mean_p": 0.813519293833338,
+                "mean_y": 0.8135593220338984
+              }
+            ],
+            "flip_rate_per_year": 2.0588235294117645,
+            "mean_regime_duration_months": 5.666666666666667
+          },
+          "rule": {
+            "n_months": 204,
+            "log_loss": 0.5494375957169418,
+            "brier": 0.18755454195606602,
+            "skill_vs_climatology": 0.20804813201130923,
+            "skill_vs_climatology_ci_low": 0.13665472498096973,
+            "skill_vs_climatology_ci_high": 0.2855262348033339,
+            "auc": 0.7891682785299806,
+            "accuracy": 0.7009803921568627,
+            "expected_calibration_error": 0.07185111877530592,
+            "calibration_table": [
+              {
+                "bin": "(-0.001, 0.1]",
+                "n": 7,
+                "mean_p": 0.03816904644349549,
+                "mean_y": 0.0
+              },
+              {
+                "bin": "(0.1, 0.2]",
+                "n": 12,
+                "mean_p": 0.1419875725494988,
+                "mean_y": 0.0
+              },
+              {
+                "bin": "(0.2, 0.3]",
+                "n": 15,
+                "mean_p": 0.2524120315799098,
+                "mean_y": 0.26666666666666666
+              },
+              {
+                "bin": "(0.3, 0.4]",
+                "n": 25,
+                "mean_p": 0.35442492501471257,
+                "mean_y": 0.48
+              },
+              {
+                "bin": "(0.4, 0.5]",
+                "n": 22,
+                "mean_p": 0.4535586270816671,
+                "mean_y": 0.36363636363636365
+              },
+              {
+                "bin": "(0.5, 0.6]",
+                "n": 44,
+                "mean_p": 0.5488443174506796,
+                "mean_y": 0.5227272727272727
+              },
+              {
+                "bin": "(0.6, 0.7]",
+                "n": 40,
+                "mean_p": 0.6484712745948484,
+                "mean_y": 0.75
+              },
+              {
+                "bin": "(0.7, 0.8]",
+                "n": 25,
+                "mean_p": 0.7473068821329764,
+                "mean_y": 0.8
+              },
+              {
+                "bin": "(0.8, 0.9]",
+                "n": 5,
+                "mean_p": 0.8385024658183677,
+                "mean_y": 0.8
+              },
+              {
+                "bin": "(0.9, 1.0]",
+                "n": 9,
+                "mean_p": 0.9294479357855175,
+                "mean_y": 1.0
+              }
+            ],
+            "flip_rate_per_year": 3.7058823529411766,
+            "mean_regime_duration_months": 3.1875
+          },
+          "logistic": {
+            "n_months": 204,
+            "log_loss": 0.5509647654705073,
+            "brier": 0.1860021523798933,
+            "skill_vs_climatology": 0.2058468903261751,
+            "skill_vs_climatology_ci_low": 0.05681362042170668,
+            "skill_vs_climatology_ci_high": 0.3492865813050711,
+            "auc": 0.7904255319148936,
+            "accuracy": 0.7254901960784313,
+            "expected_calibration_error": 0.05000236078635133,
+            "calibration_table": [
+              {
+                "bin": "(-0.001, 0.1]",
+                "n": 20,
+                "mean_p": 0.04009300359928834,
+                "mean_y": 0.0
+              },
+              {
+                "bin": "(0.1, 0.2]",
+                "n": 8,
+                "mean_p": 0.15233463012658688,
+                "mean_y": 0.25
+              },
+              {
+                "bin": "(0.2, 0.3]",
+                "n": 23,
+                "mean_p": 0.2514844871625398,
+                "mean_y": 0.30434782608695654
+              },
+              {
+                "bin": "(0.3, 0.4]",
+                "n": 16,
+                "mean_p": 0.3526235674343101,
+                "mean_y": 0.375
+              },
+              {
+                "bin": "(0.4, 0.5]",
+                "n": 13,
+                "mean_p": 0.4424107417804537,
+                "mean_y": 0.46153846153846156
+              },
+              {
+                "bin": "(0.5, 0.6]",
+                "n": 14,
+                "mean_p": 0.5502245141606898,
+                "mean_y": 0.5
+              },
+              {
+                "bin": "(0.6, 0.7]",
+                "n": 28,
+                "mean_p": 0.6504998670282633,
+                "mean_y": 0.6428571428571429
+              },
+              {
+                "bin": "(0.7, 0.8]",
+                "n": 28,
+                "mean_p": 0.7380594916880368,
+                "mean_y": 0.7142857142857143
+              },
+              {
+                "bin": "(0.8, 0.9]",
+                "n": 22,
+                "mean_p": 0.845777412443152,
+                "mean_y": 0.7727272727272727
+              },
+              {
+                "bin": "(0.9, 1.0]",
+                "n": 32,
+                "mean_p": 0.9564015681318897,
+                "mean_y": 0.84375
+              }
+            ],
+            "flip_rate_per_year": 2.8823529411764706,
+            "mean_regime_duration_months": 4.08
+          },
+          "hmm_current": {
+            "n_months": 204,
+            "log_loss": 2.1285185699500584,
+            "brier": 0.3751969592657682,
+            "skill_vs_climatology": -2.0680176796438094,
+            "skill_vs_climatology_ci_low": -2.9036714388418416,
+            "skill_vs_climatology_ci_high": -1.2103781640320141,
+            "auc": 0.5897485493230175,
+            "accuracy": 0.5686274509803921,
+            "expected_calibration_error": 0.37371313457302985,
+            "calibration_table": [
+              {
+                "bin": "(-0.001, 0.1]",
+                "n": 34,
+                "mean_p": 0.01298889553750425,
+                "mean_y": 0.4411764705882353
+              },
+              {
+                "bin": "(0.1, 0.2]",
+                "n": 5,
+                "mean_p": 0.1612681128531423,
+                "mean_y": 0.4
+              },
+              {
+                "bin": "(0.2, 0.3]",
+                "n": 3,
+                "mean_p": 0.28242351837837076,
+                "mean_y": 0.0
+              },
+              {
+                "bin": "(0.3, 0.4]",
+                "n": 1,
+                "mean_p": 0.30579030183525124,
+                "mean_y": 1.0
+              },
+              {
+                "bin": "(0.4, 0.5]",
+                "n": 9,
+                "mean_p": 0.43038838939957835,
+                "mean_y": 0.5555555555555556
+              },
+              {
+                "bin": "(0.5, 0.6]",
+                "n": 4,
+                "mean_p": 0.5662368550650472,
+                "mean_y": 0.0
+              },
+              {
+                "bin": "(0.6, 0.7]",
+                "n": 4,
+                "mean_p": 0.6501644591654183,
+                "mean_y": 0.25
+              },
+              {
+                "bin": "(0.7, 0.8]",
+                "n": 4,
+                "mean_p": 0.7456812220873863,
+                "mean_y": 0.5
+              },
+              {
+                "bin": "(0.8, 0.9]",
+                "n": 12,
+                "mean_p": 0.8530827666459225,
+                "mean_y": 0.4166666666666667
+              },
+              {
+                "bin": "(0.9, 1.0]",
+                "n": 128,
+                "mean_p": 0.9900947997790064,
+                "mean_y": 0.6171875
+              }
+            ],
+            "flip_rate_per_year": 2.0,
+            "mean_regime_duration_months": 5.828571428571428
+          }
+        }
+      },
+      "detection_lag_months": {
+        "climatology": [
+          null
+        ],
+        "persistence": [
+          1
+        ],
+        "rule": [
+          0
+        ],
+        "logistic": [
+          0
+        ],
+        "hmm_current": [
+          0
+        ]
+      }
+    }
+  },
+  "quadrant_log_loss": {
+    "dev": {
+      "climatology": 1.2959688994301968,
+      "persistence": 0.8907205896372197,
+      "rule": 1.0161881001899729,
+      "logistic": 0.9010941501219073,
+      "hmm_current": 5.857632652224514
+    },
+    "holdout": {
+      "climatology": 1.4091409810534703,
+      "persistence": 0.931329274150514,
+      "rule": 1.1255327971830478,
+      "logistic": 1.3657992625993607,
+      "hmm_current": 7.795094696997259
+    },
+    "all": {
+      "climatology": 1.3845048816524856,
+      "persistence": 0.9224892884061233,
+      "rule": 1.1017298699464602,
+      "logistic": 1.264638966005629,
+      "hmm_current": 7.3218215257550625
+    }
+  }
+}

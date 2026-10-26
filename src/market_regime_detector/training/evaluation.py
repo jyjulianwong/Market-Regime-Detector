@@ -54,11 +54,16 @@ def walk_forward_evaluate(
     aborting every other fold. `result.attrs["skipped_folds"]` lists what was
     skipped and why; `result.attrs["n_folds_attempted"]` is the total fold count
     (evaluated + skipped), so a caller can report "N of M folds evaluable" instead
-    of silently looking complete.
+    of silently looking complete. `result.attrs["fold_fits"]` lists, per evaluated
+    fold, that fold's own per-feature emission means in z-units keyed by UP/DOWN
+    (not raw state index, since the index is arbitrary and can flip between
+    refits) — `training/occupancy.py` turns this plus the row-level `label` column
+    into the state-occupancy report.
     """
     n = len(df)
     rows: list[dict[str, object]] = []
     skipped_folds: list[dict[str, object]] = []
+    fold_fits: list[dict[str, object]] = []
 
     fold_id = 0
     fold_start = initial_window_months
@@ -117,6 +122,21 @@ def walk_forward_evaluate(
         up_state = next(s for s, label in fit_result.state_labels.items() if label == "UP")
         p_up = posterior[:, up_state]
 
+        fold_fits.append(
+            {
+                "fold_id": fold_id,
+                "test_start": str(test_df.index.min().date()),
+                "test_end": str(test_df.index.max().date()),
+                "state_means": {
+                    fit_result.state_labels[state]: {
+                        name: float(fit_result.means[state, i])
+                        for i, name in enumerate(fit_result.feature_names)
+                    }
+                    for state in fit_result.state_labels
+                },
+            }
+        )
+
         for decision_date, p in zip(test_df.index, p_up, strict=True):
             rows.append(
                 {
@@ -133,4 +153,5 @@ def walk_forward_evaluate(
     result = pd.DataFrame(rows)
     result.attrs["skipped_folds"] = skipped_folds
     result.attrs["n_folds_attempted"] = fold_id
+    result.attrs["fold_fits"] = fold_fits
     return result

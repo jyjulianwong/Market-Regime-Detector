@@ -13,6 +13,7 @@ from market_regime_detector.training.benchmarks import (
 from market_regime_detector.training.build_model import HMMHyperparameters
 from market_regime_detector.training.evaluation import walk_forward_evaluate
 from market_regime_detector.training.labels import LabelSet
+from market_regime_detector.training.occupancy import build_occupancy_report
 from market_regime_detector.training.scoring import (
     CLIP_EPS,
     accuracy,
@@ -51,11 +52,13 @@ def _axis_model_series(
     label: pd.Series,
     label_lag_months: int,
     hyperparameters: HMMHyperparameters,
-) -> tuple[dict[str, pd.Series], dict[str, list[dict[str, Any]]]]:
-    """Every model's `p_up` series for one axis, plus each model's skipped-fold
+) -> tuple[dict[str, pd.Series], dict[str, list[dict[str, Any]]], pd.DataFrame]:
+    """Every model's `p_up` series for one axis, each model's skipped-fold
     records (empty for the three baselines that never "fit" in a way that can
     fail — only the HMM and the logistic baseline have a fold-fitting step that
-    can be skipped).
+    can be skipped), and the HMM's own raw walk-forward result (kept whole,
+    with its `fold_fits`/`fold_id` attrs/column intact, for `build_occupancy_report`
+    — `_walk_forward_series` above collapses those away).
     """
     feature_defs = [f for f in feature_config.features if f.axis == axis]
     hp = hyperparameters
@@ -99,7 +102,7 @@ def _axis_model_series(
         "logistic": logistic_result.attrs.get("skipped_folds", []),
         "hmm_current": hmm_result.attrs.get("skipped_folds", []),
     }
-    return series, skipped_folds
+    return series, skipped_folds, hmm_result
 
 
 def _per_row_log_loss(p: pd.Series, y: pd.Series) -> pd.Series:
@@ -204,6 +207,11 @@ def run_evaluation(
     (the "same-month comparability rule") — each model's own raw coverage before
     that intersection is reported alongside it, never silently discarded without
     a trace.
+
+    `axis_report["occupancy"]` (one per axis) is the HMM's own state-occupancy /
+    state-means report (`training/occupancy.build_occupancy_report`) — independent
+    of any split, since it answers "what did the HMM actually learn" rather than
+    "how good were its predictions."
     """
     axis_dfs = {Axis.GROWTH: growth_df, Axis.INFLATION: inflation_df}
     axis_labels = {Axis.GROWTH: labels.growth, Axis.INFLATION: labels.inflation}
@@ -222,7 +230,7 @@ def run_evaluation(
     for axis in (Axis.GROWTH, Axis.INFLATION):
         axis_df = axis_dfs[axis]
         label = axis_labels[axis]
-        series, skipped_folds = _axis_model_series(
+        series, skipped_folds, hmm_result = _axis_model_series(
             axis_df, feature_config, axis, label, labels.label_lag_months, hyperparameters
         )
         series_by_axis[axis] = series
@@ -240,6 +248,7 @@ def run_evaluation(
                 for model in MODEL_NAMES
             },
             "skipped_folds": skipped_folds,
+            "occupancy": build_occupancy_report(hmm_result),
             "splits": {},
         }
 
@@ -334,6 +343,45 @@ def _coverage_table(axis_report: dict[str, Any]) -> str:
     return pd.DataFrame(rows).to_markdown(index=False)
 
 
+def _occupancy_overall_table(axis_report: dict[str, Any]) -> str:
+    overall = axis_report["occupancy"]["overall"]
+    rows = [
+        {
+            "state": state,
+            "n_months": stats["n_months"],
+            "fraction": round(stats["fraction"], 3),
+            "first_date": stats["first_date"],
+            "last_date": stats["last_date"],
+        }
+        for state, stats in overall.items()
+    ]
+    if not rows:
+        return "No evaluated months (every fold skipped)."
+    return pd.DataFrame(rows).to_markdown(index=False)
+
+
+def _occupancy_by_fold_table(axis_report: dict[str, Any]) -> str:
+    by_fold = axis_report["occupancy"]["by_fold"]
+    if not by_fold:
+        return "No evaluated folds."
+    feature_names = sorted(next(iter(by_fold[0]["state_means"].values())).keys())
+    rows = []
+    for fold in by_fold:
+        for state, means in fold["state_means"].items():
+            occupancy = fold["occupancy"].get(state, {})
+            row: dict[str, Any] = {
+                "fold_id": fold["fold_id"],
+                "test_start": fold["test_start"],
+                "test_end": fold["test_end"],
+                "state": state,
+                "fraction": round(occupancy["fraction"], 3) if occupancy else 0.0,
+            }
+            for name in feature_names:
+                row[name] = round(means[name], 2)
+            rows.append(row)
+    return pd.DataFrame(rows).to_markdown(index=False)
+
+
 def _quadrant_table(report: dict[str, Any]) -> str:
     quadrant = report["quadrant_log_loss"]
     rows = []
@@ -390,6 +438,10 @@ def render_evaluation_markdown(report: dict[str, Any], metadata: dict[str, Any])
             f"## {axis_name.capitalize()} axis\n\n"
             + "\n\n".join(split_sections)
             + f"\n\n### Coverage\n\n{_coverage_table(axis_report)}"
+            + "\n\n### HMM state occupancy (is a state just one episode?)\n\n"
+            f"{_occupancy_overall_table(axis_report)}\n\n"
+            "#### By fold (per-feature emission means, z-units)\n\n"
+            f"{_occupancy_by_fold_table(axis_report)}"
         )
 
     return f"""# Evaluation report
