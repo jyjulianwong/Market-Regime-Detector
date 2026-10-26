@@ -9,6 +9,7 @@ you can edit in place or paste into <https://mermaid.live> for a visual editor.
 - [3. Data flow](#3-data-flow)
 - [4. S3 / DynamoDB layout](#4-s3--dynamodb-layout)
 - [5. Where to find things](#5-where-to-find-things)
+- [6. HMM glossary](#6-hmm-glossary)
 
 ---
 
@@ -865,3 +866,49 @@ One versioned S3 bucket (`Settings.s3_bucket_name`) plus one DynamoDB table.
 
 Tests mirror the source tree: `tests/common`, `tests/ingestion` (+ `providers/`),
 `tests/training`, `tests/prediction`, `tests/server`.
+
+---
+
+## 6. HMM glossary
+
+Each axis (growth, inflation) has two hidden states, UP and DOWN. They are never observed
+directly; only the features (payrolls, copper, yield spreads, …) are.
+
+| Term | Meaning |
+|---|---|
+| **Posterior** | Updated belief about the hidden state after seeing data, e.g. `P(state = UP \| features)`. A probability, not a hard label. The repo's `p_growth_up` / `p_inflation_up` are the UP entry of this vector. |
+| **Prior** | The belief before seeing the new data. |
+| **Transition matrix** | Probability of moving between states in one step. Learned on **monthly** steps. |
+| **Emission** | How likely a given feature vector is under each state (a diagonal Gaussian per state). |
+| **Filtered posterior** | Posterior conditioned on observations up to time *t* only. Causal: no peeking at the future. Computed by the forward algorithm in `common/forward_filter.py::filtered_posterior`. |
+| **Smoothed posterior** | Posterior conditioned on *all* observations, including later ones (what `hmmlearn.predict_proba` returns). More accurate in hindsight but look-ahead, so the repo never uses it for evaluation or prediction. |
+| **Preview posterior** | Repo-specific term. One predict-and-update step off a fixed prior, applied independently to each row. See below. |
+
+**Filtering** is recursive: each step (1) *predicts* by pushing last step's belief through
+the transition matrix, then (2) *updates* by multiplying by how well the new features fit
+each state and renormalizing. The result becomes the next step's prior.
+
+**Why a preview?** The transition matrix is monthly, but predictions are wanted daily.
+Running the recursive filter daily would apply a month of transition probability about 30
+times a month and re-count near-identical evidence, saturating probabilities. Instead,
+`prediction/predict.py::_axis_posteriors` runs the real filter on month-end rows only, then
+gives every day one `preview_posterior` step from the **previous** month-end's posterior,
+using that day's own features. Days never chain into each other.
+
+```mermaid
+flowchart LR
+    ME0["Month-end M-1<br/>filtered posterior<br/>(recursive, the anchor)"]
+    D1["Day 3 of M<br/>own features"]
+    D2["Day 4 of M<br/>own features"]
+    D3["Day 17 of M<br/>own features"]
+    P1["p_up (day 3)"]
+    P2["p_up (day 4)"]
+    P3["p_up (day 17)"]
+
+    ME0 -- "one preview_posterior step" --> D1 --> P1
+    ME0 -- "one preview_posterior step" --> D2 --> P2
+    ME0 -- "one preview_posterior step" --> D3 --> P3
+```
+
+Notes: the first partial month of the lookback window has no anchor and is dropped. On a
+day that is itself a month-end, the preview equals the filtered result (same single step).
