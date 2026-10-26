@@ -10,6 +10,7 @@ you can edit in place or paste into <https://mermaid.live> for a visual editor.
 - [4. S3 / DynamoDB layout](#4-s3--dynamodb-layout)
 - [5. Where to find things](#5-where-to-find-things)
 - [6. HMM glossary](#6-hmm-glossary)
+- [7. Training walkthrough](#7-training-walkthrough)
 
 ---
 
@@ -912,3 +913,151 @@ flowchart LR
 
 Notes: the first partial month of the lookback window has no anchor and is dropped. On a
 day that is itself a month-end, the preview equals the filtered result (same single step).
+
+---
+
+## 7. Training walkthrough
+
+This is not neural-network training: there are **no epochs, mini-batches or validation
+loss**. A Gaussian HMM is fitted by the EM algorithm (Baum-Welch) on one small table of
+numbers, a few hundred rows by 5 columns per axis. "Validation" is a **walk-forward
+backtest**, not a train/validation split.
+
+### 7.1 Lake → one row of the feature matrix
+
+`build_dataset` loops over month-end **decision dates**. For each date and each feature it
+runs the same pipeline (`common/features.py`), using only what was knowable on that date.
+
+```mermaid
+flowchart LR
+    RAW[("Lake rows<br/>date, value, realtime_start")]
+    PIT["1. point_in_time_series()<br/>drop anything not yet knowable"]
+    MON["2. resample to month-end<br/>(daily series only)"]
+    TR["3. apply_transform()<br/>e.g. 3-month % change"]
+    LK["4. take the latest value<br/>= one number"]
+    CELL["one cell of the matrix<br/>(decision date × feature)"]
+
+    RAW --> PIT --> MON --> TR --> LK --> CELL
+```
+
+**Step 1 depends on the series type:**
+
+- *Vintage-aware (ALFRED: INDPRO, PAYEMS, ICSA, CPILFESL):* keep rows with
+  `realtime_start <= decision date`, and per observation date keep the latest revision known
+  by then. Revisions and publication delays are handled by `realtime_start`.
+- *Non-vintage (FRED market series, yfinance):* keep rows where
+  `date + publication_lag_days <= decision date`.
+
+**Worked example** (illustrative numbers): `payems_3m_change` on decision date 2024-06-30.
+
+| Lake row (observation date) | `realtime_start` | Knowable on 2024-06-30? |
+|---|---|---|
+| 2024-06-01 (June payrolls) | 2024-07-05 | No, not published yet |
+| 2024-05-01 | 2024-06-07 | Yes |
+| 2024-04-01 | 2024-05-03 | Yes |
+| 2024-02-01 | 2024-03-08, revised 2024-04-05 | Yes, the 2024-04-05 revision |
+
+After step 1 the series ends at May. Step 3 (`pct_change`, 3 periods) gives May vs. February,
+and step 4 returns that last value. Rows for series that are not yet long enough for their
+transform come back empty and are dropped, so the effective start date is whatever the data
+allows.
+
+The result for one axis is a table with one row per month-end and one column per feature:
+
+| decision_date | indpro_3m_change | payems_3m_change | icsa_4wk_avg_change | t10y2y_level | copper_gold_3m_momentum |
+|---|---|---|---|---|---|
+| 2024-04-30 | 0.004 | 0.006 | -2 500 | 0.35 | 0.021 |
+| 2024-05-31 | 0.003 | 0.005 | 1 250 | 0.30 | -0.012 |
+| 2024-06-30 | 0.002 | 0.004 | 3 000 | 0.27 | 0.008 |
+
+The inflation axis has its own 5 columns (core CPI, two breakeven changes, real yield, oil).
+The `sign` field on each feature (+1 if higher means "up" for that axis, e.g. -1 for jobless
+claims) is not applied here; it is only used later to label states.
+
+### 7.2 What happens inside one `fit_hmm` call
+
+Input: one axis's table (or a slice of it). Everything below is per axis, so growth and
+inflation are fitted independently.
+
+```mermaid
+flowchart TB
+    IN["axis table<br/>N months × 5 features"]
+    SC["StandardScaler.fit_transform<br/>per column: subtract mean, divide by std<br/>(mean and std are saved with the model)"]
+    R["Repeat for each of 10 random seeds"]
+    EM["GaussianHMM(n_components=2, diag).fit()<br/>EM, at most 100 iterations,<br/>whole table treated as ONE sequence"]
+    CHK{"Sanity checks<br/>1. states differ: |composite0 − composite1| > 0.1<br/>2. both states last > 2 months on average"}
+    LL["Compute log-likelihood<br/>keep if best so far"]
+    OUT["FitResult: start_prob, transition matrix,<br/>means, variances, UP/DOWN labels"]
+    ERR["none passed → ValueError"]
+
+    IN --> SC --> R --> EM --> CHK
+    CHK -- fail --> R
+    CHK -- pass --> LL --> R
+    R -- "after 10 seeds" --> OUT
+    R -. "if nothing passed" .-> ERR
+```
+
+- **Passed in:** the standardized N×5 matrix, in date order. The HMM only learns the 2-state
+  structure from this. It sees no labels.
+- **"Steps":** each seed runs EM until it converges or hits 100 iterations. Each iteration is
+  one pass over all N rows (forward-backward, then parameter update). That is the closest
+  thing to an "epoch".
+- **Learned:** `start_prob` (2), `transition_matrix` (2×2), `means` (2×5), `variances` (2×5).
+- **UP / DOWN labelling:** for each state, composite = mean over features of (state mean ×
+  feature sign). The state with the higher composite is UP. No label switching is possible.
+
+### 7.3 How many fits happen, and on what data
+
+`train_and_save_model` is run once per `train_model.py` call. For **each axis** it does:
+
+1. **One full-history fit** on all N rows. **This is the only model that is saved.**
+2. **Walk-forward evaluation**: an expanding window, refit every 12 months. These fits are
+   diagnostic only and never saved.
+
+```mermaid
+gantt
+    title Walk-forward folds (illustrative, 60-month initial window, 12-month refit)
+    dateFormat YYYY-MM
+    axisFormat %Y
+    section Fold 0
+    train (fit_hmm)      :done, f0t, 2000-01, 2005-01
+    test (filtered)      :active, f0s, 2005-01, 2006-01
+    section Fold 1
+    train (fit_hmm)      :done, f1t, 2000-01, 2006-01
+    test (filtered)      :active, f1s, 2006-01, 2007-01
+    section Fold 2
+    train (fit_hmm)      :done, f2t, 2000-01, 2007-01
+    test (filtered)      :active, f2s, 2007-01, 2008-01
+    section Final model
+    full-history fit (saved) :crit, ff, 2000-01, 2026-10
+```
+
+For each fold: `fit_hmm` on the train rows only, then standardize the **test** rows with that
+fold's own scaler, run `filtered_posterior` over them, and record `p_up` per month. A fold
+whose training window no longer shows two distinct regimes is skipped and recorded, not fatal.
+
+**Rough count** (N ≈ 300 months, i.e. ~25 years of data):
+
+| What | Count |
+|---|---|
+| Walk-forward folds per axis | ⌈(N − 60) / 12⌉ ≈ 20 |
+| `fit_hmm` calls per axis | 20 folds + 1 full = 21 |
+| EM runs per axis | 21 × 10 seeds = 210, each ≤ 100 iterations |
+| Both axes | ≈ 42 `fit_hmm` calls, ≈ 420 EM runs |
+
+Everything after fitting is cheap NumPy. `evaluate_model.py` repeats the walk-forward
+fits once more inside `run_evaluation` for its own scoring, plus a logistic baseline.
+
+### 7.4 What each stage is given
+
+| Stage | Input | Output |
+|---|---|---|
+| `build_dataset` | Lake rows, decision dates (month-ends), `FEATURE_CONFIG_V1` | `growth_df`, `inflation_df` (N×5 each), manifest |
+| `fit_hmm` (full) | One axis table, all rows | `FitResult` → saved as `*_hmm.npz`, `scalers.npz`, `labels.json` |
+| `walk_forward_evaluate` | One axis table | Per-month out-of-sample `p_up` (never saved as a model) |
+| `baseline_signal` | One axis table | Sign-of-composite UP/DOWN per month, used as a naive benchmark |
+| `compare_to_baseline`, `episode_report` | Walk-forward `p_up` + baseline | `metrics.json`, `model_card.md` |
+| `run_evaluation` (separate script) | Both tables + label series (CFNAI, USREC, CPI) | Dev / holdout scores vs. 4 baselines |
+
+Out-of-sample here means "the model was fitted only on earlier months". There is no random
+shuffling, because that would leak the future in time-series data.
