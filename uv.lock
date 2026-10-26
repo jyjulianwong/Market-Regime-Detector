@@ -1191,7 +1191,7 @@ wheels = [
 
 [[package]]
 name = "market-regime-detector"
-version = "2026.10.19.0"
+version = "2026.10.26.0"
 source = { editable = "." }
 dependencies = [
     { name = "boto3" },
