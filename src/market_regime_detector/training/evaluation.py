@@ -27,12 +27,24 @@ def walk_forward_evaluate(
     and aggregates them into one DataFrame (`decision_date`, `p_up`, `label`,
     `fold_id`).
 
-    **Simplification**: each refit segment is forward-filtered
-    independently from its own start using that fit's own `start_prob`, rather than
-    one continuous filter carried across refit boundaries — avoids reconciling whose
-    `alpha` carries forward across a parameter change. Still fully causal: a
-    segment's model is fit only on data strictly before that segment begins, and the
-    segment's own posterior never looks past its own out-of-sample window.
+    **The filter keeps its memory across refit boundaries.** After each fold's fit,
+    `filtered_posterior` runs over *every* month from the start of `df` through the
+    end of that fold's test window — standardized with that fold's own scaler and
+    filtered with that fold's own parameters — and only the test months' rows are
+    kept. Filtering just the test slice instead would restart the filter from
+    `start_prob` at the first month of every fold, throwing away what the model
+    already knew about the current regime: one ambiguous month right after a refit
+    could then flip `p_up` across 0.5 (a spurious regime change, inflating
+    flip rate and log loss) even after a long, clear run in the other regime. That
+    is also not what production does — `prediction/predict.py` filters the full
+    history — so this keeps the evaluation scoring the same inference path.
+
+    Still fully causal: a fold's parameters and scaler come only from data strictly
+    before its test window, and month `t`'s posterior depends only on observations
+    `<= t` (the forward recursion never looks ahead). Re-filtering the earlier
+    months under the new fold's parameters (rather than reusing the previous fold's
+    `alpha`) is deliberate: it avoids carrying an `alpha` computed under different
+    emission/transition parameters into the new model.
 
     **A fold whose expanding window no longer shows two separable regimes is a
     recorded gap, not a fatal error for the whole evaluation**: `fit_hmm` still
@@ -87,8 +99,12 @@ def walk_forward_evaluate(
             fold_start = fold_end
             continue
 
+        # Filter from the very first month through the end of this test window so the
+        # filter carries its memory across the refit boundary (see the docstring), then
+        # keep only the out-of-sample rows.
+        history_df = df.iloc[:fold_end]
         observations = (
-            test_df[fit_result.feature_names].to_numpy() - fit_result.scaler_mean
+            history_df[fit_result.feature_names].to_numpy() - fit_result.scaler_mean
         ) / fit_result.scaler_scale
         posterior = filtered_posterior(
             observations,
@@ -96,7 +112,7 @@ def walk_forward_evaluate(
             fit_result.transition_matrix,
             fit_result.means,
             fit_result.variances,
-        )
+        )[fold_start:]
 
         up_state = next(s for s, label in fit_result.state_labels.items() if label == "UP")
         p_up = posterior[:, up_state]
