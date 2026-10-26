@@ -409,11 +409,10 @@ Label lag: {report["label_lag_months"]} month(s). Dev/holdout split at `{report[
 
 ## Caveats
 
-- Walk-forward's filtered posterior restarts from `start_prob` at the beginning
-  of every refit fold rather than carrying one continuous filter across refit
-  boundaries (`training/evaluation.walk_forward_evaluate`'s own documented
-  simplification) — this is a known source of extra noise right at each fold's
-  start, inherited unchanged by every HMM number below.
+- Walk-forward's filtered posterior is re-run from the first month through each
+  fold's test window under that fold's refit parameters, keeping only the test
+  months (`training/evaluation.walk_forward_evaluate`), so the filter's memory
+  carries across refit boundaries, as in production inference.
 - Small sample: wide confidence intervals are expected and should not be
   over-interpreted as "no difference."
 
