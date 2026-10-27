@@ -64,6 +64,19 @@ def test_feature_configs_registry_resolves_v1_by_name() -> None:
     assert FEATURE_CONFIGS[FEATURE_CONFIG_V1.version] is FEATURE_CONFIG_V1
 
 
+def test_v1_content_hash_unchanged_by_relaxing_transform_params_typing() -> None:
+    """HMM_ACCURACY_PLAN.md Phase 3 relaxed `transform_params` from
+    `dict[str, int]` to `dict[str, int | float | str]` — a static-typing-only
+    change. Pinning v1's hash guards against a future edit accidentally
+    changing an actual v1 value (which would silently invalidate every
+    published v1 dataset_id without this catching it).
+    """
+    assert (
+        FEATURE_CONFIG_V1.content_hash()
+        == "5ccf8d2851efa0e4bdcff29c416d75ed7125d5ad0e7cbb31e27bd2dca0232d0e"
+    )
+
+
 def test_first_pass_config_has_ten_features_from_nine_series() -> None:
     assert len(FEATURE_CONFIG_V1.features) == 10
 

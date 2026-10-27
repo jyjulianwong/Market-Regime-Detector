@@ -34,7 +34,7 @@ class FeatureDefinition:
     vintage_aware: bool
     publication_lag_days: int
     transform: str
-    transform_params: dict[str, int]
+    transform_params: dict[str, int | float | str]
     sign: int
     aggregation: str = "last"
     # Set only for the one multi-series feature (copper/gold momentum) — a human

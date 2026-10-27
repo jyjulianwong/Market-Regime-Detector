@@ -1,13 +1,17 @@
+import numpy as np
 import pandas as pd
 import pytest
 
 from market_regime_detector.common.transforms import (
     apply_transform,
+    detrend,
     diff,
     identity,
     pct_change,
     pct_change_annualized,
     rolling_mean_diff,
+    rolling_zscore,
+    second_diff,
 )
 
 
@@ -49,6 +53,65 @@ def test_rolling_mean_diff() -> None:
 
     assert result.iloc[4] == pytest.approx(1.0)  # 3.5 - 2.5
     assert result.iloc[5] == pytest.approx(1.0)  # 4.5 - 3.5
+
+
+def test_detrend_subtracts_trailing_rolling_mean() -> None:
+    s = _series([1.0, 2.0, 3.0, 4.0, 5.0, 6.0])
+    result = detrend(s, window=3)
+
+    # rolling mean of [3,4,5] at index 4 is 4.0
+    assert result.iloc[4] == pytest.approx(5.0 - 4.0)
+
+
+def test_detrend_is_causal_appending_future_rows_does_not_change_earlier_values() -> None:
+    rng = np.random.default_rng(0)
+    full = _series(list(rng.normal(size=30)))
+    short = full.iloc[:20]
+
+    result_short = detrend(short, window=12)
+    result_full = detrend(full, window=12)
+
+    pd.testing.assert_series_equal(result_short, result_full.loc[result_short.index])
+
+
+def test_second_diff_is_diff_applied_twice() -> None:
+    s = _series([1.0, 2.0, 4.0, 7.0, 11.0])  # first diffs: 1,2,3,4 -> second diffs: 1,1,1
+    result = second_diff(s, n_periods=1)
+
+    assert result.iloc[2] == pytest.approx(1.0)
+    assert result.iloc[3] == pytest.approx(1.0)
+    assert result.iloc[4] == pytest.approx(1.0)
+
+
+def test_second_diff_is_causal_appending_future_rows_does_not_change_earlier_values() -> None:
+    rng = np.random.default_rng(0)
+    full = _series(list(rng.normal(size=30)))
+    short = full.iloc[:20]
+
+    result_short = second_diff(short, n_periods=1)
+    result_full = second_diff(full, n_periods=1)
+
+    pd.testing.assert_series_equal(result_short, result_full.loc[result_short.index])
+
+
+def test_rolling_zscore_matches_hand_computed_formula() -> None:
+    s = _series([1.0, 2.0, 3.0, 4.0, 10.0])
+    result = rolling_zscore(s, window=3)
+
+    window = s.iloc[2:5]
+    expected = (window.iloc[-1] - window.mean()) / window.std()
+    assert result.iloc[4] == pytest.approx(expected)
+
+
+def test_rolling_zscore_is_causal_appending_future_rows_does_not_change_earlier_values() -> None:
+    rng = np.random.default_rng(0)
+    full = _series(list(rng.normal(size=30)))
+    short = full.iloc[:20]
+
+    result_short = rolling_zscore(short, window=12)
+    result_full = rolling_zscore(full, window=12)
+
+    pd.testing.assert_series_equal(result_short, result_full.loc[result_short.index])
 
 
 def test_apply_transform_dispatches_by_name() -> None:

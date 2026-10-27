@@ -175,6 +175,7 @@ classDiagram
         identity / pct_change / diff
         pct_change_annualized
         rolling_mean_diff
+        detrend / second_diff / rolling_zscore
     }
     class forward_filter {
         <<module forward_filter.py>>
@@ -542,6 +543,50 @@ within noise of unchanged, which is expected: the fix removes a source of
 meaninglessness in the comparison, it doesn't by itself make the HMM or the
 baseline "more right" — `report.compare_to_baseline`'s own docstring already
 flags that agreement is not evidence of correctness.
+
+**New transforms + config typing** (`common/transforms.py`, `common/feature_config.py`,
+`HMM_ACCURACY_PLAN.md` Phase 3): `FeatureDefinition.transform_params` relaxed
+from `dict[str, int]` to `dict[str, int | float | str]` (`apply_transform`'s
+signature matches) — the existing int-only assumption was never actually
+enforced at runtime (`_feature_definition_from_dict` only asserts the value is
+a `dict`), just an overly narrow type hint; `FEATURE_CONFIG_V1.content_hash()`
+is confirmed unchanged by this (same hash before/after:
+`5ccf8d28...0232d0e`), since no value actually changed, only its static type.
+Three new transforms were added to `TRANSFORMS`, each with a no-look-ahead
+property test (appending future rows never changes an earlier row's output):
+`detrend` (deviation from a trailing rolling mean — "how far is this value from
+its own recent trend"), `second_diff` (`diff` applied twice at the same lag —
+"acceleration"), `rolling_zscore` (trailing-window, not full-sample, z-score).
+
+**Feature-set ablation — no net-positive addition found this round.** Five
+candidates (surprise/acceleration variants of the plan's suggested
+strongest features, added one at a time to `FEATURE_CONFIG_V1` and scored with
+the real harness against the Phase 1 baseline, full history, `all` split):
+
+| candidate              | axis      | log loss (v1 baseline → candidate) | AUC (v1 → candidate) | skill (v1 → candidate) | skipped folds |
+|------------------------|-----------|---------------------------------------:|------------------------:|---------------------------:|--------------:|
+| `payems_12m_detrend`   | growth    | 2.554 → 5.176                          | 0.662 → 0.413           | -2.701 → -6.500            | 0 → 0         |
+| `indpro_12m_detrend`   | growth    | 2.554 → 3.265                          | 0.662 → 0.480           | -2.701 → -3.731            | 0 → 0         |
+| `icsa_accel`           | growth    | 2.554 → 2.388                          | 0.662 → 0.659           | -2.701 → -2.389            | 0 → 3         |
+| `cpilfesl_12m_detrend` | inflation | 1.260 → 3.276                          | 0.755 → 0.496           | -0.816 → -3.722            | 0 → 0         |
+| `dcoilwtico_accel`     | inflation | 1.260 → 1.476                          | 0.755 → 0.779           | -0.816 → -1.128            | 0 → 0         |
+
+Every `*_12m_detrend` candidate made things clearly worse — a monthly level's
+deviation from its own trailing mean is evidently a noisier, more redundant
+signal for this HMM than the rate-of-change feature already covering the same
+series, not an independent "surprise" on top of it. `icsa_accel` is the one
+candidate with a marginally better log loss/skill, but at the cost of 3
+newly-skipped folds (vs. 0 for the Phase 1 baseline) — a real stability
+regression the aggregate numbers alone don't show, since skipped folds are
+simply absent rather than counted as a loss. `dcoilwtico_accel`'s AUC improved
+slightly but log loss and skill both got worse. None clears the bar given
+`HMM_ACCURACY_PLAN.md` Appendix B's overfitting risk (a ~300-point, 2-state,
+diag-covariance HMM is already sample-constrained; adding a feature that isn't
+a clear net win adds dimensionality for no benefit) — **`FEATURE_CONFIG_V2` was
+not created this round; `FEATURE_CONFIG_V1` remains the only registered,
+production config.** The new transforms stay registered and tested for a
+future candidate (e.g. once Phase 4 brings in genuinely new series) to use —
+this is a recorded negative result, not an unfinished implementation.
 
 ### 2.4 `prediction/` — batch Lambda (no `hmmlearn`)
 
