@@ -648,6 +648,46 @@ production config.** The new transforms stay registered and tested for a
 future candidate (e.g. once Phase 4 brings in genuinely new series) to use —
 this is a recorded negative result, not an unfinished implementation.
 
+**Phase 5 Group 1 (daily market) — no net-positive addition found this round
+either.** `HMM_ACCURACY_PLAN.md` Phase 5 names VIX, the 2y yield, the 5y5y
+inflation breakeven, the dollar index, and three cyclical/defensive or
+small/large-cap ETF ratios as lower-lag candidates. `VIXCLS`/`DGS2` were
+ingested this round to close a Phase 4 documentation gap (see "Phase 4
+data-availability spike" above); the rest were already in the lake. Nine
+candidates added one at a time to `FEATURE_CONFIG_V1`, scored the same way as
+Phase 3, full history, `all` split:
+
+| candidate               | axis      | log loss (v1 → candidate) | AUC (v1 → candidate) | skill (v1 → candidate) | skipped folds |
+|-------------------------|-----------|------------------------------:|-------------------------:|----------------------------:|--------------:|
+| `vix_level_last`        | growth    | 2.554 → 5.968                 | 0.662 → 0.344            | -2.701 → -7.647             | 0 → 0         |
+| `vix_level_mean`        | growth    | 2.554 → 6.123                 | 0.662 → 0.411            | -2.701 → -7.872             | 0 → 0         |
+| `vix_1m_change` (diff)  | growth    | 2.554 → 2.239                 | 0.662 → 0.664            | -2.701 → -2.325             | 0 → 1         |
+| `vix_1m_pct_change`     | growth    | 2.554 → 2.501                 | 0.662 → 0.578            | -2.701 → -2.715             | 0 → 1         |
+| `vix_3m_change` (diff)  | growth    | 2.554 → 2.838                 | 0.662 → 0.590            | -2.701 → -3.112             | 0 → 0         |
+| `dgs2_1m_change`        | growth    | 2.554 → 3.041                 | 0.662 → 0.528            | -2.701 → -3.109             | 0 → 3         |
+| `t5yifr_1m_change`      | inflation | 1.260 → 1.289                 | 0.755 → 0.767            | -0.816 → -0.861             | 0 → 1         |
+| `dtwexbgs_1m_change`    | inflation | 1.260 → 1.509                 | 0.755 → 0.706            | -0.816 → -1.167             | 0 → 0         |
+| `iwm_spy_3m_momentum`   | growth    | 2.554 → 2.818                 | 0.662 → 0.563            | -2.701 → -3.084             | 0 → 0         |
+| `xly_xlp_3m_momentum`   | growth    | 2.554 → 2.942                 | 0.662 → 0.568            | -2.701 → -3.263             | 0 → 0         |
+| `xli_xlu_3m_momentum`   | growth    | 2.554 → 2.875                 | 0.662 → 0.608            | -2.701 → -3.166             | 0 → 0         |
+
+VIX as a raw level (either aggregation) is dramatically worse — unsurprising,
+since a level mixes the slow secular decline of implied vol over 2000-2026
+with the state signal, exactly the "level vs. change" problem `T10Y2Y` is the
+one deliberate V1 exception to. The one candidate with a real log loss/skill
+improvement, `vix_1m_change`, hits the identical trade-off Phase 3's
+`icsa_accel` did: better aggregate numbers, but a newly-skipped fold (2014-15)
+the aggregate metrics don't penalize. Two follow-up transforms tried to keep
+the improvement without the skip (`vix_1m_pct_change`, `vix_3m_change`) —
+neither did; both lose on log loss/AUC/skill *and* one still carries a skip.
+Every other candidate is clearly worse on every metric. **`FEATURE_CONFIG_V2`
+was not created from this group; `FEATURE_CONFIG_V1` remains the only
+registered, production config** — the same `icsa_accel` precedent applies: a
+newly-skipped fold is a real stability regression the plan's own Phase 5
+acceptance bar ("no increase in skipped folds") explicitly rules out, and the
+aggregate-metric improvement alone isn't enough to override that given
+Appendix B's overfitting risk on a ~300-point sample.
+
 ### 2.4 `prediction/` — batch Lambda (no `hmmlearn`)
 
 ```mermaid
