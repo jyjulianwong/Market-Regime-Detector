@@ -55,6 +55,14 @@ FIRST_PASS_SERIES = [
     SeriesSpec("MICH", "fred", "inflation"),
     SeriesSpec("DTWEXBGS", "fred", "inflation"),
     SeriesSpec("GASREGW", "fred", "inflation"),
+    # HMM_ACCURACY_PLAN.md Phase 5 "daily market" group candidates. These two
+    # were checked for availability during the Phase 4 spike (see
+    # phase4_data_availability.py's FRED_CANDIDATES) but the decision table
+    # committed in that phase omitted them — a gap closed here before building
+    # features on them: both have long FRED history (1990+), no vintage
+    # concept (market-derived), and no circularity risk.
+    SeriesSpec("VIXCLS", "fred", "growth"),
+    SeriesSpec("DGS2", "fred", "growth"),
 ]
 
 # Evaluation-only: ground-truth label inputs for `training/labels.py`'s scoring

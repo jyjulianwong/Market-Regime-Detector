@@ -321,6 +321,7 @@ settling its ingestion `source` as `"fred"` rather than guessing.
 | `IHLIDXUS` (Indeed)                           | deferred   | starts 2020 only — same truncation tradeoff as `WEI` |
 | `DCOILBRENTEU`                                 | skip       | near-duplicate of the already-used `DCOILWTICO` (WTI); Brent/WTI are highly correlated, no clear case for both |
 | Cleveland Fed inflation nowcast, NY Fed Staff Nowcast, Manheim, NY Fed supply-chain index, card spending | skip | no public FRED/yfinance series id found this pass (nowcasts) or proprietary/short (private data), matching the plan's own expectation |
+| `VIXCLS`, `DGS2`                              | **ingested** (Phase 5) | checked for availability in this spike's script (both 1990+, no vintage concept) but omitted from this table and `FIRST_PASS_SERIES` by oversight; closed in Phase 5 before building the "daily market" feature group that the plan names them for |
 
 **Training-window decision (open decision #4): keep the current ~2000+ window
 as the default.** Only `WEI`/`GDPNOW`/`IHLIDXUS` would benefit from a shorter
