@@ -291,6 +291,65 @@ classDiagram
     YFinanceProvider ..> schema : to_naive_utc
 ```
 
+**Phase 4 data-availability spike** (`HMM_ACCURACY_PLAN.md`, research + ingestion,
+no `FeatureConfig`/model change): checked real vendor availability for every
+candidate series the plan lists, against real FRED/ALFRED/yfinance, before
+deciding what to pull into the lake. Per-date ALFRED vintage counts (not just
+"does ALFRED return rows") settled which candidates are genuinely point-in-time
+vs. not — e.g. `GDPNOW` has a median of 19 distinct `realtime_start`s per
+observation date (confirms real, frequent re-estimation, contrary to the
+plan's worry that nowcast backcasts might not be true PIT), `BAMLH0A0HYM2` has
+exactly 1 vintage per date (never revised — consistent with a market-derived
+spread) but its *history* only starts `2023-10-27` (ICE licensing, as the plan
+anticipated), and `NFCI` isn't in ALFRED's vintage database at all (0 rows),
+settling its ingestion `source` as `"fred"` rather than guessing.
+
+| series                                      | verdict    | reason |
+|-----------------------------------------------|------------|--------|
+| `CFNAI`                                       | skip       | label circularity — `CFNAIMA3` (heavy revision history confirmed: median 36 vintages/date) *is* the growth label |
+| `CPIAUCSL`                                    | skip       | label circularity — *is* the inflation label's underlying series (already excluded, `EVALUATION_SERIES`) |
+| `BAMLH0A0HYM2` (HY OAS spread)                | skip       | FRED history starts `2023-10-27` only (ICE licensing) — unusable at any training window back to 2000; would need an ETF proxy (HYG/IEF/LQD) to revisit |
+| `UNRATE`, `PERMIT`, `RSAFS`, `RRSFS`          | **ingested** | long history (1990+), real revisions confirmed, no circularity |
+| `NFCI`                                        | **ingested** | long history, not in ALFRED (`source="fred"`) |
+| `STLFSI4`                                     | **ingested** | long history, heavily revised (confirmed in ALFRED) |
+| `GACDISA066MSFRBNY`, `GACDFSA066MSFRBPHI`     | **ingested** | long history, real revisions confirmed; Phase 5 still needs the ~15-20 day publication-lag fix the plan calls out before either becomes a feature |
+| `SPY`, `IWM`, `XLY`, `XLP`, `XLI`, `XLU`      | **ingested** | long history (1993-2000+ depending on ticker), daily, no vintage concept (equities) |
+| `PCEPI`, `PCEPILFE`, `CES0500000003`, `MEDCPIM158SFRBCLE`, `TRMMEANCPIM158SFRBCLE` | **ingested** | long history, real revisions confirmed, not the label series (different index from `CPIAUCSL` — correlated, not circular) |
+| `T5YIFR`, `DTWEXBGS`, `MICH`, `GASREGW`       | **ingested** | long-to-moderate history, not meaningfully revised (`source="fred"`) |
+| `WEI`                                          | deferred   | starts 2008 — would truncate the shared training window (any row with a null feature is dropped axis-wide); worth a dedicated shorter-window experimental config, not a blanket window change for every feature |
+| `GDPNOW`                                       | deferred   | genuine PIT vintages confirmed, but quarterly native frequency needs a deliberate as-of design across a quarter — not low-hanging fruit |
+| `IHLIDXUS` (Indeed)                           | deferred   | starts 2020 only — same truncation tradeoff as `WEI` |
+| `DCOILBRENTEU`                                 | skip       | near-duplicate of the already-used `DCOILWTICO` (WTI); Brent/WTI are highly correlated, no clear case for both |
+| Cleveland Fed inflation nowcast, NY Fed Staff Nowcast, Manheim, NY Fed supply-chain index, card spending | skip | no public FRED/yfinance series id found this pass (nowcasts) or proprietary/short (private data), matching the plan's own expectation |
+
+**Training-window decision (open decision #4): keep the current ~2000+ window
+as the default.** Only `WEI`/`GDPNOW`/`IHLIDXUS` would benefit from a shorter
+window, and `BAMLH0A0HYM2` (the other motivating case) is unusable at *any*
+window back to 2000 anyway (its real history starts 2023). A shorter window
+for every feature to accommodate one or two short-history series would throw
+away 8-18 years of training data project-wide — if `WEI` or similar earns its
+place via ablation later, that's a dedicated shorter-window experimental
+config, not the default.
+
+**Label-circularity decision (open decision #2): keep `CFNAIMA3`/`CPIAUCSL` as
+evaluation labels; `CFNAI` and `CPIAUCSL` stay excluded as features.** Not a
+close call — `CFNAIMA3` is a 3-month average of `CFNAI` itself (near-tautological
+if fed back in as a feature), and `CPIAUCSL` *is* the inflation label's input
+series. Every other inflation candidate ingested this phase (PCE, median/
+trimmed-mean CPI, wages, gasoline) is a *different* series correlated with but
+not equal to the label — ordinary feature engineering (e.g. gasoline as a
+faster-releasing leading indicator of headline CPI), not circularity, so none
+of those needed excluding.
+
+**Scope note**: `FIRST_PASS_SERIES` is what the deployed weekly ingest Lambda
+(`prediction/handler.py`'s `"ingest"` action) iterates in production — adding
+23 entries here means the *next* scheduled weekly ingest run (already deployed,
+see "Infrastructure and deploy" in `CLAUDE.md`) will start pulling all of them
+into the real S3 lake too, not just this session's one-off backfill. None of
+them are referenced by `FEATURE_CONFIG_V1` yet, so this has no effect on the
+model, cost is a few more provider API calls per week (all well within FRED's
+free-tier limits) and S3 storage for 23 more small partitions.
+
 ### 2.3 `training/` — lake → published model (runs locally)
 
 ```mermaid

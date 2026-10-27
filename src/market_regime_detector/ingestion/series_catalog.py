@@ -22,6 +22,39 @@ FIRST_PASS_SERIES = [
     SeriesSpec("T10YIE", "fred", "inflation"),
     SeriesSpec("DFII10", "fred", "inflation"),
     SeriesSpec("DCOILWTICO", "fred", "inflation"),
+    # HMM_ACCURACY_PLAN.md Phase 4 data-availability spike: candidates confirmed
+    # to have long history (no meaningful truncation vs. the current ~2000+
+    # training window), no label circularity, and (where the per-date vintage
+    # check below found real revisions) real ALFRED vintage history. Ingested
+    # now so the lake has history to train against once Phase 5 actually wires
+    # one into FeatureConfig — not yet referenced by any FeatureDefinition, same
+    # "ingest now, wire later" pattern as AlphaVantageProvider (see
+    # ingestion/alpha_vantage_provider.py). `source="alfred"` below is backed by
+    # a real per-date revision check (ALFRED has 0 dates for NFCI; MICH/GASREGW
+    # are revised on <1% of dates, so "fred" is simpler and loses nothing).
+    SeriesSpec("UNRATE", "alfred", "growth"),
+    SeriesSpec("PERMIT", "alfred", "growth"),
+    SeriesSpec("RSAFS", "alfred", "growth"),
+    SeriesSpec("RRSFS", "alfred", "growth"),
+    SeriesSpec("NFCI", "fred", "growth"),
+    SeriesSpec("STLFSI4", "alfred", "growth"),
+    SeriesSpec("GACDISA066MSFRBNY", "alfred", "growth"),  # Empire State survey
+    SeriesSpec("GACDFSA066MSFRBPHI", "alfred", "growth"),  # Philly Fed survey
+    SeriesSpec("SPY", "yfinance", "growth"),
+    SeriesSpec("IWM", "yfinance", "growth"),
+    SeriesSpec("XLY", "yfinance", "growth"),
+    SeriesSpec("XLP", "yfinance", "growth"),
+    SeriesSpec("XLI", "yfinance", "growth"),
+    SeriesSpec("XLU", "yfinance", "growth"),
+    SeriesSpec("PCEPI", "alfred", "inflation"),
+    SeriesSpec("PCEPILFE", "alfred", "inflation"),
+    SeriesSpec("T5YIFR", "fred", "inflation"),
+    SeriesSpec("MEDCPIM158SFRBCLE", "alfred", "inflation"),
+    SeriesSpec("TRMMEANCPIM158SFRBCLE", "alfred", "inflation"),
+    SeriesSpec("CES0500000003", "alfred", "inflation"),
+    SeriesSpec("MICH", "fred", "inflation"),
+    SeriesSpec("DTWEXBGS", "fred", "inflation"),
+    SeriesSpec("GASREGW", "fred", "inflation"),
 ]
 
 # Evaluation-only: ground-truth label inputs for `training/labels.py`'s scoring
