@@ -515,6 +515,34 @@ defaults a missing key to `np.inf` (no clipping) so a model published before
 this change keeps its original, unclipped behavior on load rather than being
 silently clipped under an artifact that predates `common/scaling.py`.
 
+**Baseline fix** (`training/baseline.py::baseline_signal`, `HMM_ACCURACY_PLAN.md`
+Phase 2): the model-card "agreement with baseline" comparison
+(`training/build_model.py` → `report.compare_to_baseline`) averaged **raw**
+feature values into its sign-weighted composite — whichever feature happened to
+have the largest native units (ICSA's raw claims count, in the thousands)
+swamped every rate-of-change feature, making the comparison close to
+meaningless. Fixed the same way `benchmarks.fixed_rule_baseline` (the
+evaluation harness's own causal "rule" baseline, a separate consumer of the
+same idea) already did it: standardize every feature with its own *expanding*
+(causal, no look-ahead) mean/std before combining, dropping rows before
+`min_observations` (24) expanding-window observations exist rather than
+computing a degenerate early z-score. Before/after, measured as label
+agreement with the real HMM's walk-forward out-of-sample labels on
+`FEATURE_CONFIG_V1` + Phase 1's current scaler defaults, full history:
+
+| axis      | agreement with baseline (before, raw) | agreement with baseline (after, expanding z-score) |
+|-----------|---------------------------------------:|-----------------------------------------------------:|
+| growth    | 38.3%                                    | 71.1%                                                  |
+| inflation | 75.7%                                    | 74.8%                                                  |
+
+Growth improved sharply — ICSA's raw-unit dominance was specifically a
+growth-axis problem (growth's feature set is the one with a weekly claims-count
+series; inflation's features are already closer in native scale). Inflation is
+within noise of unchanged, which is expected: the fix removes a source of
+meaninglessness in the comparison, it doesn't by itself make the HMM or the
+baseline "more right" — `report.compare_to_baseline`'s own docstring already
+flags that agreement is not evidence of correctness.
+
 ### 2.4 `prediction/` — batch Lambda (no `hmmlearn`)
 
 ```mermaid
