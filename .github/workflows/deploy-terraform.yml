@@ -75,8 +75,8 @@ jobs:
             -var="cors_allowed_origins=${{ vars.CORS_ALLOWED_ORIGINS || '' }}" \
             -var="staleness_max_age_hours=${{ vars.STALENESS_MAX_AGE_HOURS || '36' }}" \
             -var="alert_email=${{ vars.ALERT_EMAIL || 'julianwong2000@gmail.com' }}" \
-            -var="batch_predict_schedule_expression=${{ vars.BATCH_PREDICT_SCHEDULE_EXPRESSION || 'cron(30 6 ? * MON-FRI *)' }}" \
-            -var="batch_ingest_schedule_expression=${{ vars.BATCH_INGEST_SCHEDULE_EXPRESSION || 'cron(0 5 ? * SUN *)' }}" \
+            -var="batch_predict_schedule_expression=${{ vars.BATCH_PREDICT_SCHEDULE_EXPRESSION || 'cron(0 6 ? * MON-FRI *)' }}" \
+            -var="batch_ingest_schedule_expression=${{ vars.BATCH_INGEST_SCHEDULE_EXPRESSION || 'cron(0 4 ? * MON-FRI *)' }}" \
             -no-color \
             -out=tfplan
         continue-on-error: true
@@ -173,8 +173,8 @@ jobs:
             -var="cors_allowed_origins=${{ vars.CORS_ALLOWED_ORIGINS || '' }}" \
             -var="staleness_max_age_hours=${{ vars.STALENESS_MAX_AGE_HOURS || '36' }}" \
             -var="alert_email=${{ vars.ALERT_EMAIL || 'julianwong2000@gmail.com' }}" \
-            -var="batch_predict_schedule_expression=${{ vars.BATCH_PREDICT_SCHEDULE_EXPRESSION || 'cron(30 6 ? * MON-FRI *)' }}" \
-            -var="batch_ingest_schedule_expression=${{ vars.BATCH_INGEST_SCHEDULE_EXPRESSION || 'cron(0 5 ? * SUN *)' }}" \
+            -var="batch_predict_schedule_expression=${{ vars.BATCH_PREDICT_SCHEDULE_EXPRESSION || 'cron(0 6 ? * MON-FRI *)' }}" \
+            -var="batch_ingest_schedule_expression=${{ vars.BATCH_INGEST_SCHEDULE_EXPRESSION || 'cron(0 4 ? * MON-FRI *)' }}" \
             -auto-approve \
             -no-color
 

@@ -442,7 +442,7 @@ resource "aws_lambda_permission" "apigateway_server" {
 # ---------------------------------------------------------------------------
 # EventBridge — two independently-scheduled cron jobs against the *same*
 # batch-lambda function (brief section 3.5; a plain CloudWatch Events Rule,
-# not EventBridge Scheduler): a weekly ingestion run and a
+# not EventBridge Scheduler): a daily ingestion run and a
 # daily prediction run, dispatched by `prediction/handler.py` on each
 # target's `action` input payload. One shared retry policy + SQS
 # dead-letter queue for failed invocations of either.
@@ -510,11 +510,11 @@ resource "aws_lambda_permission" "eventbridge_predict_batch_lambda" {
   source_arn    = aws_cloudwatch_event_rule.predict_batch_lambda.arn
 }
 
-# --- Weekly: ingest (refresh the lake from every first-pass provider) -------
+# --- Daily: ingest (refresh the lake from every first-pass provider) -------
 
 resource "aws_cloudwatch_event_rule" "ingest_batch_lambda" {
   name                = "${local.scoped_prefix}-ingest-batch-lambda"
-  description         = "Triggers the '${local.scoped_prefix}-batch' Lambda with action=ingest, weekly"
+  description         = "Triggers the '${local.scoped_prefix}-batch' Lambda with action=ingest, daily"
   schedule_expression = var.batch_ingest_schedule_expression
 }
 

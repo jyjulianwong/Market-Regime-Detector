@@ -74,7 +74,7 @@ FIRST_PASS_SERIES = [
 # Evaluation-only: ground-truth label inputs for `training/labels.py`'s scoring
 # harness, never fed to a model as a feature (that would be circular — these are
 # "what actually happened," not point-in-time-knowable signal). Deliberately NOT
-# in FIRST_PASS_SERIES — the weekly ingest Lambda (`prediction/handler.py`)
+# in FIRST_PASS_SERIES — the daily ingest Lambda (`prediction/handler.py`)
 # iterates FIRST_PASS_SERIES directly, not this catalog module as a whole, and
 # must not fetch these as part of that production schedule.
 EVALUATION_SERIES = [
