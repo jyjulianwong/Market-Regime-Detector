@@ -57,15 +57,15 @@ variable "staleness_max_age_hours" {
 # ---------------------------------------------------------------------------
 
 variable "batch_predict_schedule_expression" {
-  description = "EventBridge Rule cron expression for the daily prediction run (batch-lambda {\"action\": \"predict\"}) — 06:00 UTC daily, after the 04:00 UTC ingestion run"
+  description = "EventBridge Rule cron expression for the daily prediction run (batch-lambda {\"action\": \"predict\"}) — 06:00 UTC, weekdays, after the 04:00 UTC ingestion run"
   type        = string
-  default     = "cron(0 6 * * ? *)"
+  default     = "cron(0 6 ? * MON-FRI *)"
 }
 
 variable "batch_ingest_schedule_expression" {
-  description = "EventBridge Rule cron expression for the daily ingestion run (batch-lambda {\"action\": \"ingest\"}) — 04:00 UTC daily, ahead of the prediction run"
+  description = "EventBridge Rule cron expression for the daily ingestion run (batch-lambda {\"action\": \"ingest\"}) — 04:00 UTC, weekdays, ahead of the prediction run"
   type        = string
-  default     = "cron(0 4 * * ? *)"
+  default     = "cron(0 4 ? * MON-FRI *)"
 }
 
 variable "alert_email" {

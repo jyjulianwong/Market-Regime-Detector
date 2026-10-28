@@ -702,8 +702,8 @@ Schedules (EventBridge → batch Lambda, see `terraform/main.tf`):
 
 | Rule | Cadence | Event | Does |
 |---|---|---|---|
-| ingest | Daily 04:00 UTC | `{"action": "ingest"}` | `ingest_incremental` for every series in `FIRST_PASS_SERIES` (per-series failures logged, not fatal) |
-| predict | Daily 06:00 UTC | `{"action": "predict"}` | `run_prediction` off the lake, then `write_prediction_outputs`; **never ingests** |
+| ingest | Mon–Fri 04:00 UTC | `{"action": "ingest"}` | `ingest_incremental` for every series in `FIRST_PASS_SERIES` (per-series failures logged, not fatal) |
+| predict | Mon–Fri 06:00 UTC | `{"action": "predict"}` | `run_prediction` off the lake, then `write_prediction_outputs`; **never ingests** |
 
 ### 3.2 Ingestion sequence
 

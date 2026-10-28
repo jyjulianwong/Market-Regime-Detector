@@ -6,12 +6,12 @@ batch pipeline of two independent Gaussian HMMs, served by a read-only API.
 ## Architecture
 
 ```
-EventBridge Rule "ingest" (daily, 04:00 UTC)
+EventBridge Rule "ingest" (Mon–Fri, 04:00 UTC)
   └─► Batch Lambda, event {"action": "ingest"}
         incremental ingestion (FRED/ALFRED/yfinance/Alpha Vantage)
           └─► S3 app bucket: data/asset=<id>/year=<yyyy>/data.parquet
 
-EventBridge Rule "predict" (daily, 06:00 UTC)
+EventBridge Rule "predict" (Mon–Fri, 06:00 UTC)
   └─► Batch Lambda, event {"action": "predict"}
         ├─ reads the production model from the DynamoDB registry
         ├─ loads that model's artifacts from S3: models/<model_id>/
@@ -203,8 +203,8 @@ In your GitHub repository → **Settings → Secrets and variables → Actions**
 | `CORS_ALLOWED_ORIGINS` | e.g. `https://jyjulianwong.github.io` (empty by default — no cross-origin access until set) |
 | `STALENESS_MAX_AGE_HOURS` | Default `36` |
 | `ALERT_EMAIL` | Default `julianwong2000@gmail.com` |
-| `BATCH_PREDICT_SCHEDULE_EXPRESSION` | Default `cron(0 6 * * ? *)` (daily) |
-| `BATCH_INGEST_SCHEDULE_EXPRESSION` | Default `cron(0 4 * * ? *)` (daily) |
+| `BATCH_PREDICT_SCHEDULE_EXPRESSION` | Default `cron(0 6 ? * MON-FRI *)` (daily, weekdays) |
+| `BATCH_INGEST_SCHEDULE_EXPRESSION` | Default `cron(0 4 ? * MON-FRI *)` (daily, weekdays) |
 
 These are what the workflow reads on every run — see [CI/CD](#cicd) below.
 
@@ -363,8 +363,8 @@ aws ecr get-login-password --region eu-west-2 | \
 
 | Time (UTC) | Event |
 |---|---|
-| 04:00 | `ingest` EventBridge Rule invokes the batch Lambda with `{"action": "ingest"}` — incrementally ingests every first-pass series into the lake |
-| 06:00 | `predict` EventBridge Rule invokes the batch Lambda with `{"action": "predict"}` — loads the production model, runs the real recursive causal forward filter over month-end rows only, previews every other day in the lookback window with one `preview_posterior` step off its month's previous month-end (never a daily recursion — see `prediction/predict.py`'s `_axis_posteriors`), writes `predictions/model_id=<id>/{latest,history}.json` and a write-once `snapshots/asof=<date>.json` |
+| 04:00, Mon–Fri | `ingest` EventBridge Rule invokes the batch Lambda with `{"action": "ingest"}` — incrementally ingests every first-pass series into the lake |
+| 06:00, Mon–Fri | `predict` EventBridge Rule invokes the batch Lambda with `{"action": "predict"}` — loads the production model, runs the real recursive causal forward filter over month-end rows only, previews every other day in the lookback window with one `preview_posterior` step off its month's previous month-end (never a daily recursion — see `prediction/predict.py`'s `_axis_posteriors`), writes `predictions/model_id=<id>/{latest,history}.json` and a write-once `snapshots/asof=<date>.json` |
 | Any time | `GET /v1/predictions/latest` (and `/history`) on the Server Lambda Function URL serve whatever the last `predict` run wrote |
 | On failure | EventBridge retries, then the message lands in the shared SQS DLQ; a CloudWatch alarm on the batch Lambda's `Errors` metric emails `alert_email` |
 
