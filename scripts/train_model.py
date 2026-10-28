@@ -21,6 +21,7 @@ from typing import cast
 import pandas as pd
 
 from market_regime_detector.common.aws_s3 import get_s3_client
+from market_regime_detector.common.feature_config import FEATURE_CONFIGS
 from market_regime_detector.common.logging import configure_logging
 from market_regime_detector.common.settings import get_settings
 from market_regime_detector.training.build_model import train_and_save_model
@@ -40,6 +41,12 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--output-dir", type=Path, required=True, help="Local directory to write the model into."
     )
+    parser.add_argument(
+        "--feature-config",
+        default="v1",
+        choices=sorted(FEATURE_CONFIGS),
+        help="Named FeatureConfig to train with (see common.feature_config.FEATURE_CONFIGS).",
+    )
     return parser.parse_args()
 
 
@@ -48,11 +55,17 @@ def main() -> None:
     configure_logging(settings.log_level)
     args = _parse_args()
     end = args.end if args.end is not None else date.today()
+    feature_config = FEATURE_CONFIGS[args.feature_config]
 
     s3 = get_s3_client()
-    logger.info("building dataset from %s to %s", args.start, end)
+    logger.info(
+        "building dataset from %s to %s with feature config %s",
+        args.start,
+        end,
+        feature_config.version,
+    )
     dataset = build_dataset(
-        s3, settings.s3_bucket_name, pd.Timestamp(args.start), pd.Timestamp(end)
+        s3, settings.s3_bucket_name, pd.Timestamp(args.start), pd.Timestamp(end), feature_config
     )
 
     logger.info(
@@ -64,7 +77,7 @@ def main() -> None:
     for warning in cast(list[str], dataset.manifest["warnings"]):
         logger.warning(warning)
 
-    train_and_save_model(args.output_dir, dataset.growth_df, dataset.inflation_df)
+    train_and_save_model(args.output_dir, dataset.growth_df, dataset.inflation_df, feature_config)
 
     (args.output_dir / "manifest.json").write_text(
         json.dumps(dataset.manifest, indent=2, default=str)
