@@ -335,6 +335,35 @@ FEATURE_CONFIG_V2 = FeatureConfig(
 )
 
 
+# `HMM_ACCURACY_PLAN.md` Phase 5 Group 3 (in-month survey features): the
+# strongest single-feature win in the entire Phase 5 ablation — growth log
+# loss nearly halves (2.554 -> 1.449) with no skipped-fold regression. See
+# `ARCHITECTURE.md` section 2.3 for the full ablation table, including why
+# the near-identical `empire_state_3m_change` variant was left out (a toss-up
+# against the level on AUC/skill, not a clear second independent win, and
+# Appendix B's overfitting-risk principle prefers one strong feature over two
+# redundant transforms of the same series) and why the equivalent Philly Fed
+# survey failed on both variants.
+FEATURE_CONFIG_V3 = FeatureConfig(
+    version="v3",
+    features=(
+        *FEATURE_CONFIG_V2.features,
+        FeatureDefinition(
+            name="empire_state_level",
+            axis=Axis.GROWTH,
+            series_id="GACDISA066MSFRBNY",
+            source="alfred",
+            native_frequency=Frequency.MONTHLY,
+            vintage_aware=True,
+            publication_lag_days=16,
+            transform="identity",
+            transform_params={},
+            sign=1,
+        ),
+    ),
+)
+
+
 # A registry of every named `FeatureConfig`, keyed by `version` — lets callers
 # (e.g. `scripts/evaluate_model.py --feature-config`) select a config by name
 # instead of importing a specific module-level constant. `HMM_ACCURACY_PLAN.md`
@@ -343,4 +372,5 @@ FEATURE_CONFIG_V2 = FeatureConfig(
 FEATURE_CONFIGS: dict[str, FeatureConfig] = {
     FEATURE_CONFIG_V1.version: FEATURE_CONFIG_V1,
     FEATURE_CONFIG_V2.version: FEATURE_CONFIG_V2,
+    FEATURE_CONFIG_V3.version: FEATURE_CONFIG_V3,
 }

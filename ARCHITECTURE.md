@@ -759,6 +759,52 @@ revision density turned out too extreme to paginate practically either way —
 it was reclassified to non-vintage `source="fred"` and the corrected numbers
 above are from that clean re-ingest, not the original broken run.
 
+**Phase 5 Group 3 (in-month surveys) — the strongest single-feature win in
+all of Phase 5.** Candidates: Empire State (`GACDISA066MSFRBNY`) and Philly
+Fed (`GACDFSA066MSFRBPHI`) regional manufacturing surveys, growth axis, level
+and 3-month-change variants. Both were checked for real ALFRED vintages this
+round (median 5 and 3 revisions/date respectively, safely under the
+pagination cap fixed above) and confirmed genuine — `vintage_aware=True` is
+used directly rather than the plan's non-vintage fallback lag rule, which was
+written for the case where no real vintages exist. Observed real publication
+lag (first vintage vs. the observation date stamped to the 1st of the
+reference month): ~14-17 days for Empire State, ~15-21 days for Philly Fed —
+both recorded as `publication_lag_days` metadata per the existing convention
+(documentation only; `realtime_start` supersedes it operationally). Scored
+against `FEATURE_CONFIG_V2`, full history, `all` split:
+
+| candidate                 | axis   | log loss (v2 → candidate) | AUC (v2 → candidate) | skill (v2 → candidate) | skipped folds |
+|----------------------------|--------|------------------------------:|-------------------------:|----------------------------:|--------------:|
+| `empire_state_level`       | growth | **2.554 → 1.449**             | **0.662 → 0.815**        | **-2.701 → -1.139**         | **0 → 0**     |
+| `empire_state_3m_change`   | growth | 2.554 → 1.488                 | 0.662 → 0.834            | -2.701 → -1.198             | 0 → 0         |
+| `philly_fed_level`         | growth | 2.554 → 2.885                 | 0.662 → 0.571            | -2.701 → -3.190             | 0 → 0         |
+| `philly_fed_3m_change`     | growth | 2.554 → 3.191                 | 0.662 → 0.556            | -2.701 → -3.635             | 0 → 0         |
+
+Empire State's survey level nearly halves growth log loss with no
+skipped-fold regression — by far the largest single-feature improvement
+found across all of Phase 5 (Groups 1-3), confirming section 0.1's "lower-lag
+features are likely the highest-value change" hypothesis more strongly than
+Group 2's `gasregw_12wk_change` did. The 3-month-change variant is a
+near-tie against the level (better AUC, slightly worse log loss/skill) — not
+an independent second win, just the same signal transformed, so only the
+level was adopted (Appendix B's overfitting-risk principle: one strong
+feature over two redundant transforms of the same series). Philly Fed's
+equivalent survey fails on both variants, clearly worse on every metric —
+a genuine axis-specific finding, not a methodology gap, since the identical
+treatment worked decisively for Empire State. **`FEATURE_CONFIG_V3` =
+`FEATURE_CONFIG_V2` + `empire_state_level`**, now registered in
+`FEATURE_CONFIGS`.
+
+**Phase 5 Group 4 (published nowcasts) — deferred, no change.** The plan's
+only Group 4 candidate is `GDPNOW`, already resolved in the Phase 4
+data-availability spike above: genuine PIT vintages confirmed, but its
+quarterly native frequency needs a deliberate as-of design across a quarter
+that this phase didn't attempt — not low-hanging fruit, per that existing
+decision. No code change; this closes out Phase 5's four groups.
+`FEATURE_CONFIG_V3` is the final result of Phase 5: one growth win (Empire
+State) and one inflation win (gasoline), on top of V1, out of 15 candidates
+tested across Groups 1-3.
+
 ### 2.4 `prediction/` — batch Lambda (no `hmmlearn`)
 
 ```mermaid

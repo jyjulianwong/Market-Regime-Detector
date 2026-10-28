@@ -5,6 +5,7 @@ import pytest
 from market_regime_detector.common.feature_config import (
     FEATURE_CONFIG_V1,
     FEATURE_CONFIG_V2,
+    FEATURE_CONFIG_V3,
     FEATURE_CONFIGS,
     Axis,
     FeatureConfig,
@@ -84,6 +85,26 @@ def test_v2_is_v1_plus_one_gasregw_feature() -> None:
     assert new_feature.series_id == "GASREGW"
     assert new_feature.axis == Axis.INFLATION
     assert FEATURE_CONFIG_V2.content_hash() != FEATURE_CONFIG_V1.content_hash()
+
+
+def test_feature_configs_registry_resolves_v3_by_name() -> None:
+    assert FEATURE_CONFIGS["v3"] is FEATURE_CONFIG_V3
+    assert FEATURE_CONFIGS[FEATURE_CONFIG_V3.version] is FEATURE_CONFIG_V3
+
+
+def test_v3_is_v2_plus_one_empire_state_feature() -> None:
+    """HMM_ACCURACY_PLAN.md Phase 5 Group 3: the strongest single-feature win
+    in all of Phase 5 — see ARCHITECTURE.md for the full ablation table.
+    """
+    assert len(FEATURE_CONFIG_V3.features) == len(FEATURE_CONFIG_V2.features) + 1
+    assert (
+        FEATURE_CONFIG_V3.features[: len(FEATURE_CONFIG_V2.features)] == FEATURE_CONFIG_V2.features
+    )
+    new_feature = FEATURE_CONFIG_V3.features[-1]
+    assert new_feature.name == "empire_state_level"
+    assert new_feature.series_id == "GACDISA066MSFRBNY"
+    assert new_feature.axis == Axis.GROWTH
+    assert FEATURE_CONFIG_V3.content_hash() != FEATURE_CONFIG_V2.content_hash()
 
 
 def test_v1_content_hash_unchanged_by_relaxing_transform_params_typing() -> None:
