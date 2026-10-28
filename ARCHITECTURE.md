@@ -795,6 +795,29 @@ treatment worked decisively for Empire State. **`FEATURE_CONFIG_V3` =
 `FEATURE_CONFIG_V2` + `empire_state_level`**, now registered in
 `FEATURE_CONFIGS`.
 
+**Caveat found and checked during Phase 7's retrain, not assumed away**:
+`empire_state_level`'s real ALFRED vintage history only starts `2014-03-17`
+(confirmed by checking `min(realtime_start)` per observation date — every
+date before that, back to the series' real 2001 start, has its *earliest*
+vintage stamped `2014-03-17`, meaning ALFRED's vintage tracking for this
+series simply doesn't reach further back, even though raw observation dates
+do). `_build_axis_df` drops any row with a null feature, so adding this
+feature truncates V3's growth training sample from V2's 209 rows (`2009-05`
+to `2026-09`) down to 151 rows (`2014-03` to `2026-09`) — the table above
+compared `v2_baseline` on its full 209-row sample against candidates on
+that smaller 151-row sample, not strictly apples-to-apples, since a
+different (more recent) sub-period could simply be easier to fit regardless
+of which feature is added. Rerun with `v2` restricted to the exact same 151
+decision dates `v3` used: `v2` (restricted) scores log loss `1.941`, AUC
+`0.722`, skill `-1.866` — clearly better than `v2`'s full-sample numbers
+(confirming the 2014-2026 window genuinely is somewhat easier on its own),
+but still clearly worse than `v3`'s `1.449`/`0.815`/`-1.139` on the identical
+window. Both effects are real; `empire_state_level` contributes a genuine,
+independent improvement on top of the window effect, so the adoption
+decision stands — but the feature-attributable improvement is the
+apples-to-apples gap (`1.941` → `1.449`, ~25% relative), not the larger
+raw gap the table above shows at face value.
+
 **Phase 5 Group 4 (published nowcasts) — deferred, no change.** The plan's
 only Group 4 candidate is `GDPNOW`, already resolved in the Phase 4
 data-availability spike above: genuine PIT vintages confirmed, but its
