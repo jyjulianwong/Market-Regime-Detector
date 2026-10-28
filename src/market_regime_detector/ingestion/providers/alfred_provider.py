@@ -79,8 +79,16 @@ class AlfredProvider(DataProvider):
     ) -> pd.DataFrame:
         df: pd.DataFrame
         if asof is None:
+            # ALFRED rejects `realtime_end` after *its own* server-side "today",
+            # which can be a day behind this machine's clock (observed: a
+            # `ValueError` from a real request made while this machine's UTC
+            # date had already rolled over). A one-day buffer avoids that
+            # ambiguity; it only means the single most recent day's revisions
+            # (if any were published literally today) are picked up by the
+            # *next* ingest run instead, never a look-ahead risk.
+            ceiling = date.today() - timedelta(days=1)
             df = _fetch_all_releases_paginated(
-                self._client, series_id, _ALFRED_REALTIME_FLOOR, date.today()
+                self._client, series_id, _ALFRED_REALTIME_FLOOR, ceiling
             )
             df = df.copy()
             start_ts, end_ts = pd.Timestamp(start), pd.Timestamp(end)
