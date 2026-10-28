@@ -83,6 +83,35 @@ def test_build_feature_value_monthly_at_exact_month_end() -> None:
     assert result == pytest.approx(0.1)  # 121/110 - 1
 
 
+def test_build_feature_value_survey_not_visible_until_its_real_mid_month_release() -> None:
+    """HMM_ACCURACY_PLAN.md Phase 5 Group 3 (Empire State / Philly Fed surveys):
+    the observation date is stamped to the 1st of the reference month, but the
+    real release is mid-month (~15 days later, confirmed against real ALFRED
+    vintages for both series). A decision date before the real release must
+    not see that month's reading; a decision date on/after it must. Both
+    series turned out to have genuine ALFRED vintages, so this is exercised
+    via vintage_aware=True (realtime_start), not the plan's non-vintage
+    date+lag<=asof fallback — the existing PIT mechanism already covers it
+    with no new code, just a feature-shaped regression test.
+    """
+    df = _canonical_df(
+        ["2024-01-01", "2024-02-01"],
+        [10.0, 15.0],
+        source="alfred",
+    )
+    # Override realtime_start to the real release date, ~15 days after each
+    # observation's stamped-to-the-1st date (matching the Empire State lag
+    # pattern found in this phase).
+    df["realtime_start"] = pd.to_datetime(["2024-01-15", "2024-02-15"])
+    feature = _monthly_feature(transform="identity", transform_params={}, publication_lag_days=15)
+
+    before_release = build_feature_value(df, feature, pd.Timestamp("2024-02-10"))
+    after_release = build_feature_value(df, feature, pd.Timestamp("2024-02-20"))
+
+    assert before_release == 10.0  # February's own reading isn't published yet
+    assert after_release == 15.0  # now visible — the real release has passed
+
+
 def test_build_feature_value_daily_mid_month_uses_partial_month() -> None:
     """The training/inference-unifying behavior: a mid-month evaluation_date collapses
     to a partial "current month" bucket automatically, with no special-casing.
