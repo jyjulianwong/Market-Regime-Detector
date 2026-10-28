@@ -828,6 +828,28 @@ decision. No code change; this closes out Phase 5's four groups.
 State) and one inflation win (gasoline), on top of V1, out of 15 candidates
 tested across Groups 1-3.
 
+**Phase 7 — retrained and published `v3`, promotion pending.**
+`scripts/train_model.py` gained a `--feature-config` flag (mirroring
+`scripts/evaluate_model.py`'s existing one) since `train_and_save_model`
+already accepted the parameter but the CLI had no way to select anything but
+`v1`. Retrained full-history (`2000-01-01` to today) with `v3`: growth hash
+`c5e2fdfd...`, 151 growth rows / 282 inflation rows (growth's row count is
+the `empire_state_level` truncation documented above, carried through to the
+real training run, not just the ablation), 0 skipped folds on either axis.
+Known-episode validation: 2020 COVID (12 months, mean confidence 0.954) and
+2021-23 inflation shock (36 months, 0.903) both validate with high
+confidence; the 2008-09 financial crisis episode shows 0 months (confirmed
+pre-existing, not a new regression — `v2`'s growth sample already starts
+`2009-05`, after the crisis, for reasons predating this plan). Published to
+the model registry as `mrd-20261028-b4887a5e`, stage `staging` (never
+`production` — `publish_model.py`'s own CLI enforces that; only
+`promote_model.py` can). Verified both ways round-trip through the current
+codebase: the new `v3` artifact predicts correctly, and the existing
+production artifact (`mrd-20261018-c94a9da2`, published before this
+session's Phase 1 scaler/clip work) still loads and predicts — backward
+compatibility holds. Promoting `v3` to production is a separate, explicit
+step not yet taken.
+
 ### 2.4 `prediction/` — batch Lambda (no `hmmlearn`)
 
 ```mermaid
