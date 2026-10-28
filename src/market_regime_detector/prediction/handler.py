@@ -20,7 +20,7 @@ def _parse_date(event: dict[str, Any], key: str) -> date | None:
 
 
 def _handle_ingest(event: dict[str, Any], settings: Settings) -> dict[str, object]:
-    """Weekly-scheduled action: incremental ingestion for every first-pass series.
+    """Daily-scheduled action: incremental ingestion for every first-pass series.
     Each series' failure is caught and logged, not raised — one bad provider call
     must not take down the whole run.
     """
@@ -89,7 +89,7 @@ _ACTIONS = {
 
 def handler(event: dict[str, Any], _context: object = None) -> dict[str, object]:
     """Batch Lambda entrypoint, shared by two separately-scheduled EventBridge
-    Rules (see terraform/main.tf): a weekly `{"action": "ingest"}` run and a daily
+    Rules (see terraform/main.tf): a daily `{"action": "ingest"}` run and a daily
     `{"action": "predict"}` run that nowcasts off whatever ingestion already
     landed in the lake. Dispatches on an explicit `action` key rather than always
     doing both, as a single combined run (brief section 3.3's original design)

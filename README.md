@@ -6,12 +6,12 @@ batch pipeline of two independent Gaussian HMMs, served by a read-only API.
 ## Architecture
 
 ```
-EventBridge Rule "ingest" (weekly, Sun 05:00 UTC)
+EventBridge Rule "ingest" (daily, 04:00 UTC)
   └─► Batch Lambda, event {"action": "ingest"}
         incremental ingestion (FRED/ALFRED/yfinance/Alpha Vantage)
           └─► S3 app bucket: data/asset=<id>/year=<yyyy>/data.parquet
 
-EventBridge Rule "predict" (daily, 06:30 UTC Mon–Fri)
+EventBridge Rule "predict" (daily, 06:00 UTC)
   └─► Batch Lambda, event {"action": "predict"}
         ├─ reads the production model from the DynamoDB registry
         ├─ loads that model's artifacts from S3: models/<model_id>/
@@ -34,9 +34,9 @@ promote to "production".
 | S3 app bucket | `data/`, `datasets/`, `models/`, `predictions/` — one bucket, versioned |
 | DynamoDB `models` table | Model registry: `model_id` → stage (`development`/`staging`/`production`/`archived`) |
 | ECR repository | Batch Lambda's container image |
-| Batch Lambda (container image, amd64) | One function, two actions: `ingest` (weekly) and `predict` (daily) — the only component that imports `hmmlearn`-free inference code; never imports `training/` |
+| Batch Lambda (container image, amd64) | One function, two actions: `ingest` (daily) and `predict` (daily) — the only component that imports `hmmlearn`-free inference code; never imports `training/` |
 | Server Lambda (zip) | Read-only `/v1` endpoints — never imports `pandas`/`numpy`/`hmmlearn` |
-| 2x EventBridge Rule + shared SQS DLQ | Weekly ingest trigger, daily predict trigger, retries, dead-letter queue for failed invocations of either |
+| 2x EventBridge Rule + shared SQS DLQ | Daily ingest trigger, daily predict trigger, retries, dead-letter queue for failed invocations of either |
 | CloudWatch alarm + SNS | Emails `alert_email` on batch Lambda errors |
 | SSM parameters | `SecureString` copies of the provider API keys (see note below) |
 | GitHub Actions IAM user | Static access key — Terraform apply, ECR push, both Lambdas' code updates |
@@ -152,7 +152,7 @@ terraform apply \
 This creates everything else: the S3 app bucket, the DynamoDB model registry, the
 SSM parameters, both IAM roles, the batch Lambda (now pointing at the real image
 you just pushed), the Server Lambda (a dependency-less placeholder zip — see step 4),
-its public Function URL, the two EventBridge Rules (`ingest` weekly, `predict`
+its public Function URL, the two EventBridge Rules (`ingest` daily, `predict`
 daily) + shared DLQ, and the CloudWatch alarm + SNS topic.
 
 Optional variables (all have sensible defaults — see `terraform/variables.tf`):
@@ -203,8 +203,8 @@ In your GitHub repository → **Settings → Secrets and variables → Actions**
 | `CORS_ALLOWED_ORIGINS` | e.g. `https://jyjulianwong.github.io` (empty by default — no cross-origin access until set) |
 | `STALENESS_MAX_AGE_HOURS` | Default `36` |
 | `ALERT_EMAIL` | Default `julianwong2000@gmail.com` |
-| `BATCH_PREDICT_SCHEDULE_EXPRESSION` | Default `cron(30 6 ? * MON-FRI *)` (daily, weekdays) |
-| `BATCH_INGEST_SCHEDULE_EXPRESSION` | Default `cron(0 5 ? * SUN *)` (weekly, Sundays) |
+| `BATCH_PREDICT_SCHEDULE_EXPRESSION` | Default `cron(0 6 * * ? *)` (daily) |
+| `BATCH_INGEST_SCHEDULE_EXPRESSION` | Default `cron(0 4 * * ? *)` (daily) |
 
 These are what the workflow reads on every run — see [CI/CD](#cicd) below.
 
@@ -245,7 +245,7 @@ reason:
 | T10YIE, DFII10 | 2003-01-02 |
 
 `promote_model.py` also best-effort async-invokes the batch Lambda so a first
-prediction exists immediately rather than waiting for the next 06:30 UTC run.
+prediction exists immediately rather than waiting for the next 06:00 UTC run.
 
 ### 9. Test it
 
@@ -359,12 +359,12 @@ aws ecr get-login-password --region eu-west-2 | \
 
 ---
 
-## Weekly / daily flow
+## Daily flow
 
 | Time (UTC) | Event |
 |---|---|
-| 05:00, Sun | `ingest` EventBridge Rule invokes the batch Lambda with `{"action": "ingest"}` — incrementally ingests every first-pass series into the lake |
-| 06:30, Mon–Fri | `predict` EventBridge Rule invokes the batch Lambda with `{"action": "predict"}` — loads the production model, runs the real recursive causal forward filter over month-end rows only, previews every other day in the lookback window with one `preview_posterior` step off its month's previous month-end (never a daily recursion — see `prediction/predict.py`'s `_axis_posteriors`), writes `predictions/model_id=<id>/{latest,history}.json` and a write-once `snapshots/asof=<date>.json` |
+| 04:00 | `ingest` EventBridge Rule invokes the batch Lambda with `{"action": "ingest"}` — incrementally ingests every first-pass series into the lake |
+| 06:00 | `predict` EventBridge Rule invokes the batch Lambda with `{"action": "predict"}` — loads the production model, runs the real recursive causal forward filter over month-end rows only, previews every other day in the lookback window with one `preview_posterior` step off its month's previous month-end (never a daily recursion — see `prediction/predict.py`'s `_axis_posteriors`), writes `predictions/model_id=<id>/{latest,history}.json` and a write-once `snapshots/asof=<date>.json` |
 | Any time | `GET /v1/predictions/latest` (and `/history`) on the Server Lambda Function URL serve whatever the last `predict` run wrote |
 | On failure | EventBridge retries, then the message lands in the shared SQS DLQ; a CloudWatch alarm on the batch Lambda's `Errors` metric emails `alert_email` |
 
