@@ -311,7 +311,7 @@ settling its ingestion `source` as `"fred"` rather than guessing.
 | `BAMLH0A0HYM2` (HY OAS spread)                | skip       | FRED history starts `2023-10-27` only (ICE licensing) — unusable at any training window back to 2000; would need an ETF proxy (HYG/IEF/LQD) to revisit |
 | `UNRATE`, `PERMIT`, `RSAFS`, `RRSFS`          | **ingested** | long history (1990+), real revisions confirmed, no circularity |
 | `NFCI`                                        | **ingested** | long history, not in ALFRED (`source="fred"`) |
-| `STLFSI4`                                     | **ingested** | long history, heavily revised (confirmed in ALFRED) |
+| `STLFSI4`                                     | **ingested, later reclassified** (Phase 5) | long history, heavily revised (confirmed in ALFRED) — but see the Phase 5 note below: the revision density turned out too extreme to paginate practically, so it was moved to `source="fred"` |
 | `GACDISA066MSFRBNY`, `GACDFSA066MSFRBPHI`     | **ingested** | long history, real revisions confirmed; Phase 5 still needs the ~15-20 day publication-lag fix the plan calls out before either becomes a feature |
 | `SPY`, `IWM`, `XLY`, `XLP`, `XLI`, `XLU`      | **ingested** | long history (1993-2000+ depending on ticker), daily, no vintage concept (equities) |
 | `PCEPI`, `PCEPILFE`, `CES0500000003`, `MEDCPIM158SFRBCLE`, `TRMMEANCPIM158SFRBCLE` | **ingested** | long history, real revisions confirmed, not the label series (different index from `CPIAUCSL` — correlated, not circular) |
@@ -322,6 +322,34 @@ settling its ingestion `source` as `"fred"` rather than guessing.
 | `DCOILBRENTEU`                                 | skip       | near-duplicate of the already-used `DCOILWTICO` (WTI); Brent/WTI are highly correlated, no clear case for both |
 | Cleveland Fed inflation nowcast, NY Fed Staff Nowcast, Manheim, NY Fed supply-chain index, card spending | skip | no public FRED/yfinance series id found this pass (nowcasts) or proprietary/short (private data), matching the plan's own expectation |
 | `VIXCLS`, `DGS2`                              | **ingested** (Phase 5) | checked for availability in this spike's script (both 1990+, no vintage concept) but omitted from this table and `FIRST_PASS_SERIES` by oversight; closed in Phase 5 before building the "daily market" feature group that the plan names them for |
+
+**A real bug found and fixed in Phase 5, not assumed correct**: `STLFSI4`'s
+Phase 5 Group 2 ablation produced `NaN` log loss/AUC instead of a number.
+Traced to `AlfredProvider.fetch()`'s `asof=None` path — `fredapi`'s
+`get_series_all_releases` issues one unbounded request against ALFRED's
+`series/observations` endpoint, which silently caps at 100,000 rows with no
+truncation signal (`fredapi` never paginates). `STLFSI4`'s real revision
+density is extreme enough to hit that cap even within a single 6-year
+`realtime_start` window (confirmed directly against the live API, not
+assumed) — so Phase 4's original backfill silently landed only `1993-10-10`
+through `2003-10-10` of `STLFSI4`'s real `1993-2026` history. Every walk-forward
+fold after 2003 then saw a frozen, zero-variance feature value (the PIT lookup
+had nothing newer to find), which is what actually produced the `NaN`
+metrics — not a flaw in the harness.
+
+Fixed in `AlfredProvider.fetch()`: a new `_fetch_all_releases_paginated`
+helper recursively bisects the `realtime_start`/`realtime_end` window until
+each sub-query is under the cap, raising loudly if even a single-day window
+still can't fit rather than guessing. But `STLFSI4` specifically turned out
+too revision-dense to paginate *practically* even with this fix — a 6-year
+window still hits 100,000 rows, meaning full-history pagination would need an
+impractical number of narrow sub-requests. Resolution: the 11 corrupted
+`STLFSI4` lake partitions (`year=1993`-`2003`, populated before the fix) were
+deleted from the real S3 lake and `STLFSI4` was reclassified from
+`source="alfred"`/vintage-aware to `source="fred"`/non-vintage in
+`series_catalog.py` — the same trade-off already made for `NFCI`. Re-ingested
+clean: `1993-12-31` through `2026-10-16`, one row per date, no true
+point-in-time revision tracking for this series going forward.
 
 **Training-window decision (open decision #4): keep the current ~2000+ window
 as the default.** Only `WEI`/`GDPNOW`/`IHLIDXUS` would benefit from a shorter

@@ -37,7 +37,13 @@ FIRST_PASS_SERIES = [
     SeriesSpec("RSAFS", "alfred", "growth"),
     SeriesSpec("RRSFS", "alfred", "growth"),
     SeriesSpec("NFCI", "fred", "growth"),
-    SeriesSpec("STLFSI4", "alfred", "growth"),
+    # STLFSI4 was initially catalogued as "alfred" (Phase 4 found real ALFRED
+    # revisions for it), but Phase 5 found its revision density is extreme —
+    # 100,000+ rows even within a single 6-year `realtime_start` window
+    # (likely revised on every near-daily re-estimate across its whole
+    # history), making true full-history vintage pagination impractical.
+    # Reclassified to non-vintage "fred", same treatment as NFCI.
+    SeriesSpec("STLFSI4", "fred", "growth"),
     SeriesSpec("GACDISA066MSFRBNY", "alfred", "growth"),  # Empire State survey
     SeriesSpec("GACDFSA066MSFRBPHI", "alfred", "growth"),  # Philly Fed survey
     SeriesSpec("SPY", "yfinance", "growth"),
