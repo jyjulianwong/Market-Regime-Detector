@@ -35,7 +35,12 @@ class FakeFredClient:
             series = series[series.index <= pd.Timestamp(realtime_end)]
         return series
 
-    def get_series_all_releases(self, series_id: str) -> pd.DataFrame:
+    def get_series_all_releases(
+        self,
+        series_id: str,
+        realtime_start: str | None = None,
+        realtime_end: str | None = None,
+    ) -> pd.DataFrame:
         return pd.DataFrame(
             {
                 "date": pd.to_datetime(["2024-01-01", "2024-01-01", "2024-02-01"]),
