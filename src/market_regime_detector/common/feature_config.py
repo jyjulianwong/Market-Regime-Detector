@@ -307,6 +307,34 @@ FEATURE_CONFIG_V1 = FeatureConfig(
 )
 
 
+# `HMM_ACCURACY_PLAN.md` Phase 5 Group 2 (weekly-official lower-lag features):
+# the one candidate, out of eleven tested across Groups 1-2, that cleared the
+# plan's acceptance bar (improves log loss/AUC/skill with no new skipped
+# folds vs. V1) — see `ARCHITECTURE.md` section 2.3 for the full ablation
+# table. A weekly gasoline-price change is a faster-releasing leading
+# indicator of headline CPI (gasoline feeds directly into the inflation
+# basket) than any V1 inflation feature, all of which are monthly or require
+# a multi-month lag.
+FEATURE_CONFIG_V2 = FeatureConfig(
+    version="v2",
+    features=(
+        *FEATURE_CONFIG_V1.features,
+        FeatureDefinition(
+            name="gasregw_12wk_change",
+            axis=Axis.INFLATION,
+            series_id="GASREGW",
+            source="fred",
+            native_frequency=Frequency.WEEKLY,
+            vintage_aware=False,
+            publication_lag_days=0,
+            transform="pct_change",
+            transform_params={"n_periods": 12},
+            sign=1,
+        ),
+    ),
+)
+
+
 # A registry of every named `FeatureConfig`, keyed by `version` — lets callers
 # (e.g. `scripts/evaluate_model.py --feature-config`) select a config by name
 # instead of importing a specific module-level constant. `HMM_ACCURACY_PLAN.md`
@@ -314,4 +342,5 @@ FEATURE_CONFIG_V1 = FeatureConfig(
 # the same way as `v1` without changing the evaluation script again.
 FEATURE_CONFIGS: dict[str, FeatureConfig] = {
     FEATURE_CONFIG_V1.version: FEATURE_CONFIG_V1,
+    FEATURE_CONFIG_V2.version: FEATURE_CONFIG_V2,
 }

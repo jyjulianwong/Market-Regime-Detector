@@ -4,6 +4,7 @@ import pytest
 
 from market_regime_detector.common.feature_config import (
     FEATURE_CONFIG_V1,
+    FEATURE_CONFIG_V2,
     FEATURE_CONFIGS,
     Axis,
     FeatureConfig,
@@ -62,6 +63,27 @@ def test_content_hash_changes_when_a_field_changes() -> None:
 def test_feature_configs_registry_resolves_v1_by_name() -> None:
     assert FEATURE_CONFIGS["v1"] is FEATURE_CONFIG_V1
     assert FEATURE_CONFIGS[FEATURE_CONFIG_V1.version] is FEATURE_CONFIG_V1
+
+
+def test_feature_configs_registry_resolves_v2_by_name() -> None:
+    assert FEATURE_CONFIGS["v2"] is FEATURE_CONFIG_V2
+    assert FEATURE_CONFIGS[FEATURE_CONFIG_V2.version] is FEATURE_CONFIG_V2
+
+
+def test_v2_is_v1_plus_one_gasregw_feature() -> None:
+    """HMM_ACCURACY_PLAN.md Phase 5 Group 2: the one candidate (out of eleven
+    across Groups 1-2) that cleared the acceptance bar — see ARCHITECTURE.md
+    for the full ablation table.
+    """
+    assert len(FEATURE_CONFIG_V2.features) == len(FEATURE_CONFIG_V1.features) + 1
+    assert (
+        FEATURE_CONFIG_V2.features[: len(FEATURE_CONFIG_V1.features)] == FEATURE_CONFIG_V1.features
+    )
+    new_feature = FEATURE_CONFIG_V2.features[-1]
+    assert new_feature.name == "gasregw_12wk_change"
+    assert new_feature.series_id == "GASREGW"
+    assert new_feature.axis == Axis.INFLATION
+    assert FEATURE_CONFIG_V2.content_hash() != FEATURE_CONFIG_V1.content_hash()
 
 
 def test_v1_content_hash_unchanged_by_relaxing_transform_params_typing() -> None:

@@ -716,6 +716,49 @@ acceptance bar ("no increase in skipped folds") explicitly rules out, and the
 aggregate-metric improvement alone isn't enough to override that given
 Appendix B's overfitting risk on a ~300-point sample.
 
+**Phase 5 Group 2 (weekly official) — the first net-positive addition:
+`FEATURE_CONFIG_V2` created.** Candidates: `NFCI`/`STLFSI4` (both financial-
+stress/conditions composite indices, growth axis, level and 4-week-change
+variants) and `GASREGW` (weekly gasoline price, inflation axis, 4-week and
+12-week change variants). Scored the same way as Group 1, full history,
+`all` split:
+
+| candidate              | axis      | log loss (v1 → candidate) | AUC (v1 → candidate) | skill (v1 → candidate) | skipped folds |
+|------------------------|-----------|------------------------------:|-------------------------:|----------------------------:|--------------:|
+| `nfci_level`           | growth    | 2.554 → 4.234                 | 0.662 → 0.566            | -2.701 → -5.135             | 0 → 0         |
+| `nfci_4wk_change`      | growth    | 2.554 → 2.875                 | 0.662 → 0.565            | -2.701 → -3.167             | 0 → 0         |
+| `stlfsi4_level`        | growth    | 2.554 → 4.194                 | 0.662 → 0.466            | -2.701 → -5.078             | 0 → 0         |
+| `stlfsi4_4wk_change`   | growth    | 2.554 → 2.937                 | 0.662 → 0.527            | -2.701 → -3.256             | 0 → 0         |
+| `gasregw_4wk_change`   | inflation | 1.260 → 1.296                 | 0.755 → 0.806            | -0.816 → -0.869             | 0 → 0         |
+| `gasregw_12wk_change`  | inflation | **1.260 → 1.088**             | **0.755 → 0.846**        | **-0.816 → -0.568**         | **0 → 0**     |
+
+Both financial-stress indices are clearly worse on every metric, as a growth
+feature — the same pattern as Group 1's VIX-as-a-level failure: a composite
+index that's already a weighted blend of ~100+ underlying series apparently
+doesn't give this 2-state HMM an orthogonal signal beyond what V1's
+rate-of-change features already capture, and may be *diluting* the signal by
+adding a noisy, redundant dimension (Appendix B's overfitting risk, directly
+observed). `gasregw_4wk_change` is a wash (AUC up, log loss and skill
+slightly down). `gasregw_12wk_change` is a clean win on every metric with no
+skipped-fold regression — the only candidate across both groups so far to
+clear the plan's acceptance bar outright, not a marginal trade-off like
+Group 1's `vix_1m_change`. A faster-releasing, weekly gasoline price feeding
+directly into the inflation basket beats every V1 inflation feature's
+monthly-or-slower cadence, which is exactly the "lower-lag features are
+likely the highest-value change" hypothesis section 0.1 opened with.
+**`FEATURE_CONFIG_V2` = `FEATURE_CONFIG_V1` + `gasregw_12wk_change`**, now
+registered in `FEATURE_CONFIGS` alongside `v1`.
+
+**An ALFRED pagination bug found and fixed mid-ablation** (see
+"`ingestion/` — vendors → lake" above for the full writeup): `STLFSI4`'s
+first run through this ablation produced `NaN` metrics, traced to
+`AlfredProvider` silently truncating its real vintage history past ALFRED's
+100,000-row request cap. Fixed (`_fetch_all_releases_paginated` bisects the
+request window instead of issuing one unbounded call), but `STLFSI4`'s
+revision density turned out too extreme to paginate practically either way —
+it was reclassified to non-vintage `source="fred"` and the corrected numbers
+above are from that clean re-ingest, not the original broken run.
+
 ### 2.4 `prediction/` — batch Lambda (no `hmmlearn`)
 
 ```mermaid
