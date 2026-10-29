@@ -13,6 +13,7 @@ from market_regime_detector.training.publisher import publish_model
 
 BUCKET = "test-bucket"
 TABLE_NAME = "test-registry"
+MODEL_NAME = "allweather-hmm2naive-us"
 
 
 @pytest.fixture
@@ -30,6 +31,7 @@ def aws() -> Generator[tuple[S3Client, DynamoDBClient], None, None]:
                 {"AttributeName": "model_id", "AttributeType": "S"},
                 {"AttributeName": "stage", "AttributeType": "S"},
                 {"AttributeName": "last_modified", "AttributeType": "S"},
+                {"AttributeName": "model_name", "AttributeType": "S"},
             ],
             GlobalSecondaryIndexes=[
                 {
@@ -40,7 +42,16 @@ def aws() -> Generator[tuple[S3Client, DynamoDBClient], None, None]:
                     ],
                     "Projection": {"ProjectionType": "ALL"},
                     "ProvisionedThroughput": {"ReadCapacityUnits": 5, "WriteCapacityUnits": 5},
-                }
+                },
+                {
+                    "IndexName": "model_name-index",
+                    "KeySchema": [
+                        {"AttributeName": "model_name", "KeyType": "HASH"},
+                        {"AttributeName": "stage", "KeyType": "RANGE"},
+                    ],
+                    "Projection": {"ProjectionType": "ALL"},
+                    "ProvisionedThroughput": {"ReadCapacityUnits": 5, "WriteCapacityUnits": 5},
+                },
             ],
             BillingMode="PAY_PER_REQUEST",
         )
@@ -95,22 +106,23 @@ def test_publish_model_uploads_files_and_writes_registry_item(
     model_dir = _local_model_dir(tmp_path)
     manifest = _manifest()
 
-    model_id = publish_model(model_dir, manifest, s3, BUCKET, dynamodb, TABLE_NAME)
+    model_id = publish_model(model_dir, MODEL_NAME, manifest, s3, BUCKET, dynamodb, TABLE_NAME)
 
-    assert model_id.startswith("mrd-")
+    assert model_id.startswith(f"{MODEL_NAME}-")
 
     uploaded_keys = {obj["Key"] for obj in s3.list_objects_v2(Bucket=BUCKET).get("Contents", [])}
-    assert f"models/{model_id}/growth_hmm.npz" in uploaded_keys
-    assert f"models/{model_id}/model_card.md" in uploaded_keys
+    assert f"models/{MODEL_NAME}/{model_id}/growth_hmm.npz" in uploaded_keys
+    assert f"models/{MODEL_NAME}/{model_id}/model_card.md" in uploaded_keys
     assert "datasets/ds-abc123/manifest.json" in uploaded_keys
 
     item = get_model(dynamodb, TABLE_NAME, model_id)
     assert item is not None
+    assert item["model_name"] == MODEL_NAME
     assert item["stage"] == "staging"
     assert item["dataset_id"] == "ds-abc123"
     assert item["n_assets"] == 1
     assert "assets" not in item  # the full asset list must never land in DynamoDB
-    assert item["model_s3_uri"] == f"s3://{BUCKET}/models/{model_id}/"
+    assert item["model_s3_uri"] == f"s3://{BUCKET}/models/{MODEL_NAME}/{model_id}/"
     assert item["manifest_s3_uri"] == f"s3://{BUCKET}/datasets/ds-abc123/manifest.json"
     assert item["hmm_config_summary"] == {
         "n_states": 2,
@@ -126,7 +138,7 @@ def test_publish_model_respects_requested_stage(
     model_dir = _local_model_dir(tmp_path)
 
     model_id = publish_model(
-        model_dir, _manifest(), s3, BUCKET, dynamodb, TABLE_NAME, stage="development"
+        model_dir, MODEL_NAME, _manifest(), s3, BUCKET, dynamodb, TABLE_NAME, stage="development"
     )
 
     item = get_model(dynamodb, TABLE_NAME, model_id)
@@ -134,13 +146,27 @@ def test_publish_model_respects_requested_stage(
     assert item["stage"] == "development"
 
 
+def test_publish_model_rejects_invalid_model_name(
+    tmp_path: Path, aws: tuple[S3Client, DynamoDBClient]
+) -> None:
+    s3, dynamodb = aws
+    model_dir = _local_model_dir(tmp_path)
+
+    with pytest.raises(ValueError, match="model_name"):
+        publish_model(model_dir, "Not Valid!", _manifest(), s3, BUCKET, dynamodb, TABLE_NAME)
+
+
 def test_publish_model_is_retry_safe(tmp_path: Path, aws: tuple[S3Client, DynamoDBClient]) -> None:
     s3, dynamodb = aws
     model_dir = _local_model_dir(tmp_path)
     manifest = _manifest()
 
-    first_model_id = publish_model(model_dir, manifest, s3, BUCKET, dynamodb, TABLE_NAME)
-    second_model_id = publish_model(model_dir, manifest, s3, BUCKET, dynamodb, TABLE_NAME)
+    first_model_id = publish_model(
+        model_dir, MODEL_NAME, manifest, s3, BUCKET, dynamodb, TABLE_NAME
+    )
+    second_model_id = publish_model(
+        model_dir, MODEL_NAME, manifest, s3, BUCKET, dynamodb, TABLE_NAME
+    )
 
     assert first_model_id == second_model_id
 
@@ -148,14 +174,15 @@ def test_publish_model_is_retry_safe(tmp_path: Path, aws: tuple[S3Client, Dynamo
     assert first_item is not None
     # Identity fields are unchanged by the retry — only last_modified legitimately
     # reflects each actual publish attempt's completion time.
-    for key in ("model_id", "dataset_id", "stage", "model_s3_uri", "manifest_s3_uri"):
+    for key in ("model_id", "model_name", "dataset_id", "stage", "model_s3_uri", "manifest_s3_uri"):
         assert (
             first_item[key]
             == {
                 "model_id": first_model_id,
+                "model_name": MODEL_NAME,
                 "dataset_id": "ds-abc123",
                 "stage": "staging",
-                "model_s3_uri": f"s3://{BUCKET}/models/{first_model_id}/",
+                "model_s3_uri": f"s3://{BUCKET}/models/{MODEL_NAME}/{first_model_id}/",
                 "manifest_s3_uri": f"s3://{BUCKET}/datasets/ds-abc123/manifest.json",
             }[key]
         )

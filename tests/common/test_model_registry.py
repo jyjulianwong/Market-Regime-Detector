@@ -7,7 +7,7 @@ from mypy_boto3_dynamodb.client import DynamoDBClient
 
 from market_regime_detector.common.model_registry import (
     get_model,
-    get_production_model,
+    get_production_model_by_name,
     list_models_by_stage,
     promote_model,
     put_model_item,
@@ -27,6 +27,7 @@ def client() -> Generator[DynamoDBClient, None, None]:
                 {"AttributeName": "model_id", "AttributeType": "S"},
                 {"AttributeName": "stage", "AttributeType": "S"},
                 {"AttributeName": "last_modified", "AttributeType": "S"},
+                {"AttributeName": "model_name", "AttributeType": "S"},
             ],
             GlobalSecondaryIndexes=[
                 {
@@ -40,7 +41,19 @@ def client() -> Generator[DynamoDBClient, None, None]:
                         "ReadCapacityUnits": 5,
                         "WriteCapacityUnits": 5,
                     },
-                }
+                },
+                {
+                    "IndexName": "model_name-index",
+                    "KeySchema": [
+                        {"AttributeName": "model_name", "KeyType": "HASH"},
+                        {"AttributeName": "stage", "KeyType": "RANGE"},
+                    ],
+                    "Projection": {"ProjectionType": "ALL"},
+                    "ProvisionedThroughput": {
+                        "ReadCapacityUnits": 5,
+                        "WriteCapacityUnits": 5,
+                    },
+                },
             ],
             BillingMode="PAY_PER_REQUEST",
         )
@@ -48,10 +61,14 @@ def client() -> Generator[DynamoDBClient, None, None]:
 
 
 def _item(
-    model_id: str, stage: str, last_modified: str = "2024-01-01T00:00:00"
+    model_id: str,
+    stage: str,
+    last_modified: str = "2024-01-01T00:00:00",
+    model_name: str = "allweather-hmm2naive-us",
 ) -> dict[str, object]:
     return {
         "model_id": model_id,
+        "model_name": model_name,
         "stage": stage,
         "last_modified": last_modified,
         "dataset_id": "ds-test",
@@ -82,21 +99,40 @@ def test_get_model_returns_none_when_missing(client: DynamoDBClient) -> None:
     assert get_model(client, TABLE_NAME, "does-not-exist") is None
 
 
-def test_get_production_model_via_gsi(client: DynamoDBClient) -> None:
+def test_get_production_model_by_name_via_gsi(client: DynamoDBClient) -> None:
     put_model_item(client, TABLE_NAME, _item("mrd-1", "staging"))
     promote_model(client, TABLE_NAME, "mrd-1")
 
-    result = get_production_model(client, TABLE_NAME)
+    result = get_production_model_by_name(client, TABLE_NAME, "allweather-hmm2naive-us")
 
     assert result is not None
     assert result["model_id"] == "mrd-1"
     assert result["stage"] == "production"
 
 
-def test_get_production_model_returns_none_when_no_production(client: DynamoDBClient) -> None:
+def test_get_production_model_by_name_returns_none_when_no_production(
+    client: DynamoDBClient,
+) -> None:
     put_model_item(client, TABLE_NAME, _item("mrd-1", "staging"))
 
-    assert get_production_model(client, TABLE_NAME) is None
+    assert get_production_model_by_name(client, TABLE_NAME, "allweather-hmm2naive-us") is None
+
+
+def test_get_production_model_by_name_ignores_other_families(client: DynamoDBClient) -> None:
+    put_model_item(
+        client, TABLE_NAME, _item("mrd-1", "staging", model_name="allweather-hmm2naive-us")
+    )
+    put_model_item(
+        client, TABLE_NAME, _item("mrd-2", "staging", model_name="allweather-hmm2naive-eu")
+    )
+    promote_model(client, TABLE_NAME, "mrd-1")
+    promote_model(client, TABLE_NAME, "mrd-2")
+
+    us_production = get_production_model_by_name(client, TABLE_NAME, "allweather-hmm2naive-us")
+    eu_production = get_production_model_by_name(client, TABLE_NAME, "allweather-hmm2naive-eu")
+
+    assert us_production is not None and us_production["model_id"] == "mrd-1"
+    assert eu_production is not None and eu_production["model_id"] == "mrd-2"
 
 
 def test_list_models_by_stage(client: DynamoDBClient) -> None:
@@ -142,3 +178,26 @@ def test_promote_model_is_a_noop_when_already_production(client: DynamoDBClient)
 def test_promote_model_raises_for_nonexistent_model(client: DynamoDBClient) -> None:
     with pytest.raises(Exception, match="ConditionalCheckFailed|TransactionCanceled"):
         promote_model(client, TABLE_NAME, "does-not-exist")
+
+
+def test_promote_model_never_demotes_a_different_family(client: DynamoDBClient) -> None:
+    """The core multi-model invariant: promoting one model_name's model must never
+    touch another model_name's production item."""
+    put_model_item(
+        client, TABLE_NAME, _item("mrd-us-1", "staging", model_name="allweather-hmm2naive-us")
+    )
+    put_model_item(
+        client, TABLE_NAME, _item("mrd-eu-1", "staging", model_name="allweather-hmm2naive-eu")
+    )
+    promote_model(client, TABLE_NAME, "mrd-us-1")
+    promote_model(client, TABLE_NAME, "mrd-eu-1")
+
+    put_model_item(
+        client, TABLE_NAME, _item("mrd-us-2", "staging", model_name="allweather-hmm2naive-us")
+    )
+    promote_model(client, TABLE_NAME, "mrd-us-2")
+
+    assert get_model(client, TABLE_NAME, "mrd-us-1")["stage"] == "archived"  # type: ignore[index]
+    assert get_model(client, TABLE_NAME, "mrd-us-2")["stage"] == "production"  # type: ignore[index]
+    assert get_model(client, TABLE_NAME, "mrd-eu-1")["stage"] == "production"  # type: ignore[index]
+    assert len(list_models_by_stage(client, TABLE_NAME, "production")) == 2

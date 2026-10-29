@@ -67,10 +67,12 @@ def _load_hmm_npz(
     )
 
 
-def load_model_artifact(s3: "S3Client", bucket: str, model_id: str) -> ModelArtifact:
+def load_model_artifact(
+    s3: "S3Client", bucket: str, model_name: str, model_id: str
+) -> ModelArtifact:
     """Reads the six files `training/publisher.py` uploaded to
-    `models/<model_id>/` and reconstructs everything inference needs — no pickle,
-    per brief section 2.7.
+    `models/<model_name>/<model_id>/` and reconstructs everything inference needs —
+    no pickle, per brief section 2.7.
 
     `growth_clip`/`inflation_clip` were added to `scalers.npz` by
     `HMM_ACCURACY_PLAN.md` Phase 1 — a model published before that change has
@@ -78,7 +80,7 @@ def load_model_artifact(s3: "S3Client", bucket: str, model_id: str) -> ModelArti
     that old model's original, unclipped behavior rather than silently changing
     it under an artifact that predates clipping.
     """
-    prefix = f"models/{model_id}"
+    prefix = f"models/{model_name}/{model_id}"
 
     labels = json.loads(_get_object_bytes(s3, bucket, f"{prefix}/labels.json"))
     config = json.loads(_get_object_bytes(s3, bucket, f"{prefix}/config.json"))

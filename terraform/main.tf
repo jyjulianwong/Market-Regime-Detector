@@ -56,9 +56,12 @@ resource "aws_s3_bucket_public_access_block" "app" {
 }
 
 # ---------------------------------------------------------------------------
-# DynamoDB — model registry (brief section 4.3). Schema matches exactly what
-# every moto-backed test since Phase 5 has validated: PK model_id, GSI
-# stage-index (PK stage, SK last_modified).
+# DynamoDB — model registry. PK model_id, GSI stage-index (PK stage, SK
+# last_modified) for "every model/production model across every family", GSI
+# model_name-index (PK model_name, SK stage) added for multi-model support —
+# "the production model for this one family" without a global Limit=1 query
+# that would return an arbitrary family's production item once more than one
+# exists.
 # ---------------------------------------------------------------------------
 
 resource "aws_dynamodb_table" "models" {
@@ -81,10 +84,22 @@ resource "aws_dynamodb_table" "models" {
     type = "S"
   }
 
+  attribute {
+    name = "model_name"
+    type = "S"
+  }
+
   global_secondary_index {
     name            = "stage-index"
     hash_key        = "stage"
     range_key       = "last_modified"
+    projection_type = "ALL"
+  }
+
+  global_secondary_index {
+    name            = "model_name-index"
+    hash_key        = "model_name"
+    range_key       = "stage"
     projection_type = "ALL"
   }
 }
@@ -191,6 +206,7 @@ data "aws_iam_policy_document" "server_lambda_permissions" {
     resources = [
       aws_dynamodb_table.models.arn,
       "${aws_dynamodb_table.models.arn}/index/stage-index",
+      "${aws_dynamodb_table.models.arn}/index/model_name-index",
     ]
   }
 }
@@ -257,6 +273,7 @@ data "aws_iam_policy_document" "batch_lambda_permissions" {
     resources = [
       aws_dynamodb_table.models.arn,
       "${aws_dynamodb_table.models.arn}/index/stage-index",
+      "${aws_dynamodb_table.models.arn}/index/model_name-index",
     ]
   }
 

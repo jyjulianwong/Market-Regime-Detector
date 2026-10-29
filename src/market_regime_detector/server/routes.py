@@ -9,7 +9,7 @@ from market_regime_detector.server.reads import (
     cached_get_model,
     cached_list_models,
     cached_read_json,
-    resolve_model,
+    resolve_model_by_name,
 )
 from market_regime_detector.server.schemas import (
     HealthResponse,
@@ -44,25 +44,33 @@ def get_model_detail(model_id: str) -> ModelSummaryResponse:
     return ModelSummaryResponse.model_validate(item)
 
 
-def _resolve_or_404(table_name: str, model_id: str | None) -> dict[str, object]:
-    item = resolve_model(table_name, model_id)
+def _resolve_or_404(table_name: str, model_name: str, model_id: str | None) -> dict[str, object]:
+    item = resolve_model_by_name(table_name, model_name, model_id)
     if item is None:
-        detail = f"model {model_id!r} not found" if model_id is not None else "no production model"
+        detail = (
+            f"model {model_id!r} not found"
+            if model_id is not None
+            else f"no production model for {model_name!r}"
+        )
         raise HTTPException(status_code=404, detail=detail)
     return item
 
 
-@router.get("/predictions/latest", response_model=LatestPredictionResponse)
+@router.get("/models/{model_name}/predictions/latest", response_model=LatestPredictionResponse)
 def get_latest_prediction(
+    model_name: str,
     model_id: str | None = Query(default=None),
 ) -> LatestPredictionResponse:
     settings = get_settings()
-    registry_item = _resolve_or_404(settings.dynamodb_table_name, model_id)
+    registry_item = _resolve_or_404(settings.dynamodb_table_name, model_name, model_id)
     resolved_model_id = registry_item["model_id"]
+    resolved_model_name = registry_item["model_name"]
     assert isinstance(resolved_model_id, str)
+    assert isinstance(resolved_model_name, str)
 
     data = cached_read_json(
-        settings.s3_bucket_name, f"predictions/model_id={resolved_model_id}/latest.json"
+        settings.s3_bucket_name,
+        f"predictions/model_name={resolved_model_name}/model_id={resolved_model_id}/latest.json",
     )
     if data is None:
         raise HTTPException(
@@ -84,19 +92,23 @@ def get_latest_prediction(
     return response
 
 
-@router.get("/predictions/history", response_model=HistoryResponse)
+@router.get("/models/{model_name}/predictions/history", response_model=HistoryResponse)
 def get_prediction_history(
+    model_name: str,
     model_id: str | None = Query(default=None),
     start: date | None = Query(default=None),
     end: date | None = Query(default=None),
 ) -> HistoryResponse:
     settings = get_settings()
-    registry_item = _resolve_or_404(settings.dynamodb_table_name, model_id)
+    registry_item = _resolve_or_404(settings.dynamodb_table_name, model_name, model_id)
     resolved_model_id = registry_item["model_id"]
+    resolved_model_name = registry_item["model_name"]
     assert isinstance(resolved_model_id, str)
+    assert isinstance(resolved_model_name, str)
 
     data = cached_read_json(
-        settings.s3_bucket_name, f"predictions/model_id={resolved_model_id}/history.json"
+        settings.s3_bucket_name,
+        f"predictions/model_name={resolved_model_name}/model_id={resolved_model_id}/history.json",
     )
     if data is None:
         raise HTTPException(

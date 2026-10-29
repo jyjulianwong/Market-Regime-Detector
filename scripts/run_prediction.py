@@ -2,12 +2,14 @@
 """Run the prediction batch job locally, with any of its optional parameters.
 
 Usage:
-    uv run python scripts/run_prediction.py
-    uv run python scripts/run_prediction.py --model-id mrd-20261016-ab12cd3
-    uv run python scripts/run_prediction.py --source live --start 2024-01-01 --end 2024-06-01 --asof 2024-06-01
+    uv run python scripts/run_prediction.py --model-name allweather-hmm2naive-us
+    uv run python scripts/run_prediction.py --model-id allweather-hmm2naive-us-20261016-ab12cd3
+    uv run python scripts/run_prediction.py --model-name allweather-hmm2naive-us --source live --start 2024-01-01 --end 2024-06-01 --asof 2024-06-01
 
-An empty invocation means: production model, lake source, latest data — mirrors
-`prediction/handler.py`'s default event. A thin wrapper around
+Exactly one of `--model-name` (the family's current production model) or
+`--model-id` (an exact pinned version) must be given — mirrors
+`prediction/predict.run_prediction`'s resolution rules; there is no longer a
+single global default model. A thin wrapper around
 `market_regime_detector.prediction` — no logic of its own. Unlike the Lambda
 handler, this does **not** run incremental ingestion first; run
 `scripts/ingest_data.py --incremental` separately if you want fresh lake data.
@@ -30,7 +32,10 @@ logger = logging.getLogger(__name__)
 def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
-        "--model-id", default=None, help="Use a specific model instead of production."
+        "--model-name", default=None, help="Model family; resolves to its production model."
+    )
+    parser.add_argument(
+        "--model-id", default=None, help="Pin an exact model version, overriding --model-name."
     )
     parser.add_argument(
         "--source",
@@ -47,7 +52,10 @@ def _parse_args() -> argparse.Namespace:
         default=None,
         help="Point-in-time date. Defaults to today.",
     )
-    return parser.parse_args()
+    args = parser.parse_args()
+    if args.model_id is None and args.model_name is None:
+        parser.error("either --model-name or --model-id is required")
+    return args
 
 
 def main() -> None:
@@ -62,6 +70,7 @@ def main() -> None:
         settings.s3_bucket_name,
         settings.dynamodb_table_name,
         model_id=args.model_id,
+        model_name=args.model_name,
         source=args.source,
         start=args.start,
         end=args.end,

@@ -14,7 +14,7 @@ from market_regime_detector.common.feature_config import (
 )
 from market_regime_detector.common.features import build_feature_value, build_ratio_feature_value
 from market_regime_detector.common.forward_filter import filtered_posterior, preview_posterior
-from market_regime_detector.common.model_registry import get_model, get_production_model
+from market_regime_detector.common.model_registry import get_model, get_production_model_by_name
 from market_regime_detector.common.quadrants import quadrant_probabilities
 from market_regime_detector.common.scaling import apply_scaler
 from market_regime_detector.ingestion.lake import read_series
@@ -43,6 +43,7 @@ DEFAULT_LOOKBACK_DAYS = 730
 @dataclass
 class PredictionResult:
     model_id: str
+    model_name: str
     dataset_id: str
     asof: date
     generated_at: datetime
@@ -214,10 +215,11 @@ _EMPTY_HISTORY_COLUMNS = [
 
 
 def _empty_prediction_result(
-    model_id: str, dataset_id: str, asof: date, warnings: list[str]
+    model_id: str, model_name: str, dataset_id: str, asof: date, warnings: list[str]
 ) -> "PredictionResult":
     return PredictionResult(
         model_id=model_id,
+        model_name=model_name,
         dataset_id=dataset_id,
         asof=asof,
         generated_at=datetime.now(UTC),
@@ -234,6 +236,7 @@ def run_prediction(
     bucket: str,
     table_name: str,
     model_id: str | None = None,
+    model_name: str | None = None,
     source: str = "lake",
     start: date | None = None,
     end: date | None = None,
@@ -242,6 +245,13 @@ def run_prediction(
     """Brief section 3.3's batch prediction, as a pure function over its
     dependencies — no S3 writes here, so this is testable without touching
     `prediction/outputs.py`.
+
+    Model resolution (multi-model support): an explicit `model_id` always pins an
+    exact historical version via `get_model`. Otherwise `model_name` resolves to
+    whichever version is currently production for that family via
+    `get_production_model_by_name`. There is no longer a global "the" production
+    model to fall back to when neither is given — callers must say which model
+    family they mean.
     """
     effective_asof = asof if asof is not None else date.today()
     effective_end = min(end, effective_asof) if end is not None else effective_asof
@@ -249,21 +259,26 @@ def run_prediction(
         start if start is not None else effective_end - timedelta(days=DEFAULT_LOOKBACK_DAYS)
     )
 
-    registry_item = (
-        get_model(dynamodb_client, table_name, model_id)
-        if model_id is not None
-        else get_production_model(dynamodb_client, table_name)
-    )
+    if model_id is not None:
+        registry_item = get_model(dynamodb_client, table_name, model_id)
+    elif model_name is not None:
+        registry_item = get_production_model_by_name(dynamodb_client, table_name, model_name)
+    else:
+        raise ValueError("either model_id or model_name must be given")
     if registry_item is None:
         raise ValueError(
-            f"model {model_id!r} not found" if model_id is not None else "no production model"
+            f"model {model_id!r} not found"
+            if model_id is not None
+            else f"no production model for {model_name!r}"
         )
     resolved_model_id = registry_item["model_id"]
+    resolved_model_name = registry_item["model_name"]
     dataset_id = registry_item["dataset_id"]
     assert isinstance(resolved_model_id, str)
+    assert isinstance(resolved_model_name, str)
     assert isinstance(dataset_id, str)
 
-    artifact = load_model_artifact(s3, bucket, resolved_model_id)
+    artifact = load_model_artifact(s3, bucket, resolved_model_name, resolved_model_id)
 
     warnings: list[str] = []
     raw_by_series = _fetch_raw_series(
@@ -348,7 +363,9 @@ def run_prediction(
     common_daily_dates = growth_daily_df.index.intersection(inflation_daily_df.index)
     if len(common_daily_dates) == 0:
         warnings.append("no usable observations in range — every day is missing a feature")
-        return _empty_prediction_result(resolved_model_id, dataset_id, effective_asof, warnings)
+        return _empty_prediction_result(
+            resolved_model_id, resolved_model_name, dataset_id, effective_asof, warnings
+        )
 
     p_growth_up = _axis_posteriors(
         growth_daily_df.loc[common_daily_dates],
@@ -375,7 +392,9 @@ def run_prediction(
             "no usable observations in range — no day has a complete prior "
             "month-end anchor for both axes"
         )
-        return _empty_prediction_result(resolved_model_id, dataset_id, effective_asof, warnings)
+        return _empty_prediction_result(
+            resolved_model_id, resolved_model_name, dataset_id, effective_asof, warnings
+        )
 
     p_growth_up = p_growth_up.loc[common_dates]
     p_inflation_up = p_inflation_up.loc[common_dates]
@@ -395,6 +414,7 @@ def run_prediction(
 
     return PredictionResult(
         model_id=resolved_model_id,
+        model_name=resolved_model_name,
         dataset_id=dataset_id,
         asof=effective_asof,
         generated_at=datetime.now(UTC),

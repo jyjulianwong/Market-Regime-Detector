@@ -13,26 +13,28 @@ EventBridge Rule "ingest" (Mon–Fri, 04:00 UTC)
 
 EventBridge Rule "predict" (Mon–Fri, 06:00 UTC)
   └─► Batch Lambda, event {"action": "predict"}
-        ├─ reads the production model from the DynamoDB registry
-        ├─ loads that model's artifacts from S3: models/<model_id>/
+        ├─ fans out over every model_name currently in production in the
+        │    DynamoDB registry (multi-model support — one run per family)
+        ├─ loads each model's artifacts from S3: models/<model_name>/<model_id>/
         ├─ causal NumPy forward filter (no hmmlearn in this image)
         │    — nowcasts off whatever's already in the lake; never ingests
-        └─► S3 app bucket: predictions/model_id=<id>/{latest,history}.json
-                           and snapshots/asof=<date>.json
+        └─► S3 app bucket: predictions/model_name=<name>/model_id=<id>/{latest,history}.json
+                           and snapshots/asof=<date>.json, once per family
                                                       │
 Lambda Function URL (public, no auth)                 │
   └─► Server Lambda (zip) — read-only, no inference ─────┘
-        reads the production model from DynamoDB, reads predictions/ from S3
+        reads the production model for a given model_name from DynamoDB,
+        reads predictions/ from S3
 
 Local only (never deployed): scripts/train_model.py, publish_model.py,
-promote_model.py — fit the HMMs, publish to models/<id>/ + the registry,
-promote to "production".
+promote_model.py — fit the HMMs, publish to models/<model_name>/<model_id>/ +
+the registry, promote to "production" (scoped per model_name).
 ```
 
 | Piece | Role |
 |---|---|
 | S3 app bucket | `data/`, `datasets/`, `models/`, `predictions/` — one bucket, versioned |
-| DynamoDB `models` table | Model registry: `model_id` → stage (`development`/`staging`/`production`/`archived`) |
+| DynamoDB `models` table | Model registry: `model_id` → stage (`development`/`staging`/`production`/`archived`), scoped per `model_name` (one independent production slot per model family) |
 | ECR repository | Batch Lambda's container image |
 | Batch Lambda (container image, amd64) | One function, two actions: `ingest` (daily) and `predict` (daily) — the only component that imports `hmmlearn`-free inference code; never imports `training/` |
 | Server Lambda (zip) | Read-only `/v1` endpoints — never imports `pandas`/`numpy`/`hmmlearn` |
@@ -224,9 +226,12 @@ until you do this, once, locally:
 uv sync --all-extras
 uv run python scripts/ingest_data.py --start 2000-01-01
 uv run python scripts/train_model.py --start 2000-01-01 --output-dir ./model
-uv run python scripts/publish_model.py --model-dir ./model --manifest-path ./model/manifest.json --stage staging
+uv run python scripts/publish_model.py --model-dir ./model --manifest-path ./model/manifest.json --model-name allweather-hmm2naive-us --stage staging
 uv run python scripts/promote_model.py --model-id <model_id printed above>
 ```
+`--model-name` is the stable model family identity (multi-model support) —
+distinct from `model_id`, which also encodes a date and content hash and
+identifies one specific trained version of that family.
 `--start 2000-01-01` is earlier than every first-pass series actually needs — it's
 not an arbitrary round number, it's past the real binding constraint
 (`T10YIE`/`DFII10`, 2003) and right at the other (`HG=F`/`GC=F`, 2000-08-30), so
@@ -251,7 +256,7 @@ prediction exists immediately rather than waiting for the next 06:00 UTC run.
 
 ```bash
 curl "$(terraform -chdir=terraform output -raw server_function_url)v1/health"
-curl "$(terraform -chdir=terraform output -raw server_function_url)v1/predictions/latest"
+curl "$(terraform -chdir=terraform output -raw server_function_url)v1/models/allweather-hmm2naive-us/predictions/latest"
 ```
 
 ---
@@ -329,7 +334,7 @@ aws lambda get-function \
 # List the model registry
 aws dynamodb scan \
   --table-name "$(terraform -chdir=terraform output -raw dynamodb_table_name)" \
-  --query "Items[].{model_id:model_id.S,stage:stage.S}"
+  --query "Items[].{model_id:model_id.S,model_name:model_name.S,stage:stage.S}"
 
 # Browse the S3 app bucket
 BUCKET=$(terraform -chdir=terraform output -raw app_bucket_name)
@@ -364,8 +369,8 @@ aws ecr get-login-password --region eu-west-2 | \
 | Time (UTC) | Event |
 |---|---|
 | 04:00, Mon–Fri | `ingest` EventBridge Rule invokes the batch Lambda with `{"action": "ingest"}` — incrementally ingests every first-pass series into the lake |
-| 06:00, Mon–Fri | `predict` EventBridge Rule invokes the batch Lambda with `{"action": "predict"}` — loads the production model, runs the real recursive causal forward filter over month-end rows only, previews every other day in the lookback window with one `preview_posterior` step off its month's previous month-end (never a daily recursion — see `prediction/predict.py`'s `_axis_posteriors`), writes `predictions/model_id=<id>/{latest,history}.json` and a write-once `snapshots/asof=<date>.json` |
-| Any time | `GET /v1/predictions/latest` (and `/history`) on the Server Lambda Function URL serve whatever the last `predict` run wrote |
+| 06:00, Mon–Fri | `predict` EventBridge Rule invokes the batch Lambda with `{"action": "predict"}` — fans out over every model family currently in production, and for each one runs the real recursive causal forward filter over month-end rows only, previews every other day in the lookback window with one `preview_posterior` step off its month's previous month-end (never a daily recursion — see `prediction/predict.py`'s `_axis_posteriors`), writes `predictions/model_name=<name>/model_id=<id>/{latest,history}.json` and a write-once `snapshots/asof=<date>.json` |
+| Any time | `GET /v1/models/<model_name>/predictions/latest` (and `/history`) on the Server Lambda Function URL serve whatever the last `predict` run wrote for that model family |
 | On failure | EventBridge retries, then the message lands in the shared SQS DLQ; a CloudWatch alarm on the batch Lambda's `Errors` metric emails `alert_email` |
 
 ---

@@ -9,7 +9,7 @@ from market_regime_detector.common.aws_s3 import get_s3_client
 from market_regime_detector.common.model_registry import (
     ModelStage,
     get_model,
-    get_production_model,
+    get_production_model_by_name,
     list_all_models,
     list_models_by_stage,
 )
@@ -40,12 +40,14 @@ def cached_get_model(table_name: str, model_id: str) -> dict[str, object] | None
     return CACHE.get_or_set(f"model:{model_id}", factory)
 
 
-def cached_get_production_model(table_name: str) -> dict[str, object] | None:
+def cached_get_production_model_by_name(
+    table_name: str, model_name: str
+) -> dict[str, object] | None:
     def factory() -> dict[str, object] | None:
-        item = get_production_model(get_dynamodb_client(), table_name)
+        item = get_production_model_by_name(get_dynamodb_client(), table_name, model_name)
         return _json_safe(item) if item is not None else None
 
-    return CACHE.get_or_set("model:production", factory)
+    return CACHE.get_or_set(f"model:{model_name}:production", factory)
 
 
 def cached_list_models(table_name: str, stage: ModelStage | None) -> list[dict[str, object]]:
@@ -61,13 +63,22 @@ def cached_list_models(table_name: str, stage: ModelStage | None) -> list[dict[s
     return CACHE.get_or_set(f"models:{stage or 'all'}", factory)
 
 
-def resolve_model(table_name: str, model_id: str | None) -> dict[str, object] | None:
-    """Explicit `model_id` or the current production model — the same resolution
-    policy `prediction/predict.py` uses.
+def resolve_model_by_name(
+    table_name: str, model_name: str, model_id: str | None
+) -> dict[str, object] | None:
+    """Explicit `model_id` or the current production model for `model_name` — the
+    same resolution policy `prediction/predict.py` uses. When `model_id` is given,
+    its stored `model_name` must match the path's `model_name` — a model_id from
+    one family can't be used to read another family's data through the wrong URL;
+    a mismatch resolves to `None` (the caller turns that into a 404), same as the
+    model simply not existing.
     """
     if model_id is not None:
-        return cached_get_model(table_name, model_id)
-    return cached_get_production_model(table_name)
+        item = cached_get_model(table_name, model_id)
+        if item is not None and item.get("model_name") != model_name:
+            return None
+        return item
+    return cached_get_production_model_by_name(table_name, model_name)
 
 
 def cached_read_json(bucket: str, key: str) -> dict[str, object] | None:

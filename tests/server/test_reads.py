@@ -10,14 +10,15 @@ from market_regime_detector.common.model_registry import promote_model, put_mode
 from market_regime_detector.server.cache import CACHE
 from market_regime_detector.server.reads import (
     cached_get_model,
-    cached_get_production_model,
+    cached_get_production_model_by_name,
     cached_list_models,
     cached_read_json,
-    resolve_model,
+    resolve_model_by_name,
 )
 
 BUCKET = "test-bucket"
 TABLE_NAME = "test-registry"
+MODEL_NAME = "allweather-hmm2naive-us"
 
 
 @pytest.fixture(autouse=True)
@@ -42,6 +43,7 @@ def aws() -> Generator[tuple[S3Client, DynamoDBClient], None, None]:
                 {"AttributeName": "model_id", "AttributeType": "S"},
                 {"AttributeName": "stage", "AttributeType": "S"},
                 {"AttributeName": "last_modified", "AttributeType": "S"},
+                {"AttributeName": "model_name", "AttributeType": "S"},
             ],
             GlobalSecondaryIndexes=[
                 {
@@ -52,16 +54,26 @@ def aws() -> Generator[tuple[S3Client, DynamoDBClient], None, None]:
                     ],
                     "Projection": {"ProjectionType": "ALL"},
                     "ProvisionedThroughput": {"ReadCapacityUnits": 5, "WriteCapacityUnits": 5},
-                }
+                },
+                {
+                    "IndexName": "model_name-index",
+                    "KeySchema": [
+                        {"AttributeName": "model_name", "KeyType": "HASH"},
+                        {"AttributeName": "stage", "KeyType": "RANGE"},
+                    ],
+                    "Projection": {"ProjectionType": "ALL"},
+                    "ProvisionedThroughput": {"ReadCapacityUnits": 5, "WriteCapacityUnits": 5},
+                },
             ],
             BillingMode="PAY_PER_REQUEST",
         )
         yield s3, dynamodb
 
 
-def _item(model_id: str, stage: str) -> dict[str, object]:
+def _item(model_id: str, stage: str, model_name: str = MODEL_NAME) -> dict[str, object]:
     return {
         "model_id": model_id,
+        "model_name": model_name,
         "dataset_id": "ds-test",
         "stage": stage,
         "last_modified": "2024-01-01T00:00:00",
@@ -97,38 +109,77 @@ def test_cached_get_model_is_cached_across_calls(aws: tuple[S3Client, DynamoDBCl
     assert first == second
 
 
-def test_cached_get_production_model(aws: tuple[S3Client, DynamoDBClient]) -> None:
+def test_cached_get_production_model_by_name(aws: tuple[S3Client, DynamoDBClient]) -> None:
     _s3, dynamodb = aws
     put_model_item(dynamodb, TABLE_NAME, _item("mrd-1", "staging"))
     promote_model(dynamodb, TABLE_NAME, "mrd-1")
 
-    result = cached_get_production_model(TABLE_NAME)
+    result = cached_get_production_model_by_name(TABLE_NAME, MODEL_NAME)
 
     assert result is not None
     assert result["model_id"] == "mrd-1"
 
 
-def test_resolve_model_prefers_explicit_model_id(aws: tuple[S3Client, DynamoDBClient]) -> None:
+def test_cached_get_production_model_by_name_ignores_other_families(
+    aws: tuple[S3Client, DynamoDBClient],
+) -> None:
+    _s3, dynamodb = aws
+    put_model_item(
+        dynamodb, TABLE_NAME, _item("mrd-1", "staging", model_name="allweather-hmm2naive-us")
+    )
+    put_model_item(
+        dynamodb, TABLE_NAME, _item("mrd-2", "staging", model_name="allweather-hmm2naive-eu")
+    )
+    promote_model(dynamodb, TABLE_NAME, "mrd-1")
+    promote_model(dynamodb, TABLE_NAME, "mrd-2")
+
+    result = cached_get_production_model_by_name(TABLE_NAME, "allweather-hmm2naive-us")
+
+    assert result is not None
+    assert result["model_id"] == "mrd-1"
+
+
+def test_resolve_model_by_name_prefers_explicit_model_id(
+    aws: tuple[S3Client, DynamoDBClient],
+) -> None:
     _s3, dynamodb = aws
     put_model_item(dynamodb, TABLE_NAME, _item("mrd-1", "staging"))
     put_model_item(dynamodb, TABLE_NAME, _item("mrd-2", "staging"))
     promote_model(dynamodb, TABLE_NAME, "mrd-1")
 
-    result = resolve_model(TABLE_NAME, "mrd-2")
+    result = resolve_model_by_name(TABLE_NAME, MODEL_NAME, "mrd-2")
 
     assert result is not None
     assert result["model_id"] == "mrd-2"
 
 
-def test_resolve_model_falls_back_to_production(aws: tuple[S3Client, DynamoDBClient]) -> None:
+def test_resolve_model_by_name_falls_back_to_production(
+    aws: tuple[S3Client, DynamoDBClient],
+) -> None:
     _s3, dynamodb = aws
     put_model_item(dynamodb, TABLE_NAME, _item("mrd-1", "staging"))
     promote_model(dynamodb, TABLE_NAME, "mrd-1")
 
-    result = resolve_model(TABLE_NAME, None)
+    result = resolve_model_by_name(TABLE_NAME, MODEL_NAME, None)
 
     assert result is not None
     assert result["model_id"] == "mrd-1"
+
+
+def test_resolve_model_by_name_rejects_model_id_from_a_different_family(
+    aws: tuple[S3Client, DynamoDBClient],
+) -> None:
+    """A model_id from one family must not be reachable through another family's
+    URL path — this is the cross-family isolation guarantee the path-based API
+    depends on."""
+    _s3, dynamodb = aws
+    put_model_item(
+        dynamodb, TABLE_NAME, _item("mrd-eu-1", "staging", model_name="allweather-hmm2naive-eu")
+    )
+
+    result = resolve_model_by_name(TABLE_NAME, "allweather-hmm2naive-us", "mrd-eu-1")
+
+    assert result is None
 
 
 def test_cached_list_models_filters_by_stage(aws: tuple[S3Client, DynamoDBClient]) -> None:
@@ -155,9 +206,15 @@ def test_cached_list_models_returns_all_without_a_stage_filter(
 
 def test_cached_read_json_returns_parsed_object(aws: tuple[S3Client, DynamoDBClient]) -> None:
     s3, _dynamodb = aws
-    s3.put_object(Bucket=BUCKET, Key="predictions/model_id=mrd-1/latest.json", Body=b'{"a": 1}')
+    s3.put_object(
+        Bucket=BUCKET,
+        Key=f"predictions/model_name={MODEL_NAME}/model_id=mrd-1/latest.json",
+        Body=b'{"a": 1}',
+    )
 
-    result = cached_read_json(BUCKET, "predictions/model_id=mrd-1/latest.json")
+    result = cached_read_json(
+        BUCKET, f"predictions/model_name={MODEL_NAME}/model_id=mrd-1/latest.json"
+    )
 
     assert result == {"a": 1}
 
@@ -165,4 +222,7 @@ def test_cached_read_json_returns_parsed_object(aws: tuple[S3Client, DynamoDBCli
 def test_cached_read_json_returns_none_when_key_missing(
     aws: tuple[S3Client, DynamoDBClient],
 ) -> None:
-    assert cached_read_json(BUCKET, "predictions/model_id=mrd-1/latest.json") is None
+    assert (
+        cached_read_json(BUCKET, f"predictions/model_name={MODEL_NAME}/model_id=mrd-1/latest.json")
+        is None
+    )

@@ -48,16 +48,24 @@ def get_model(client: "DynamoDBClient", table_name: str, model_id: str) -> dict[
     return _deserialize(item) if item else None
 
 
-def get_production_model(client: "DynamoDBClient", table_name: str) -> dict[str, object] | None:
-    """Queries the `stage-index` GSI — brief section 4.3: "latest production model"
-    is a single query. At most one item should ever have `stage="production"` (the
-    invariant `promote_model` maintains); returns it, or `None`.
+def get_production_model_by_name(
+    client: "DynamoDBClient", table_name: str, model_name: str
+) -> dict[str, object] | None:
+    """Queries the `model_name-index` GSI for the production model of one model
+    family — the per-name replacement for the old global "latest production model"
+    lookup. Multi-model support means "production" is now scoped per `model_name`,
+    not table-wide: at most one item should ever have both this `model_name` and
+    `stage="production"` (the invariant `promote_model` now maintains per name), so
+    an equality query on both the GSI's hash and range key is enough; returns it, or
+    `None`.
     """
     response = client.query(
         TableName=table_name,
-        IndexName="stage-index",
-        KeyConditionExpression="stage = :stage",
-        ExpressionAttributeValues=_serialize({":stage": "production"}),  # type: ignore[arg-type]
+        IndexName="model_name-index",
+        KeyConditionExpression="model_name = :model_name AND stage = :stage",
+        ExpressionAttributeValues=_serialize(  # type: ignore[arg-type]
+            {":model_name": model_name, ":stage": "production"}
+        ),
         Limit=1,
     )
     items = response.get("Items", [])
@@ -87,18 +95,34 @@ def list_all_models(client: "DynamoDBClient", table_name: str) -> list[dict[str,
 
 
 def promote_model(client: "DynamoDBClient", table_name: str, model_id: str) -> None:
-    """Atomically demotes the current `production` model (if any, and if it isn't
-    already `model_id`) to `"archived"` and promotes `model_id` to `"production"` —
-    brief section 4.3's invariant ("at most one item has stage=production")
-    enforced structurally via a single `transact_write_items` call, not by
-    convention: there's never a moment with zero or two production models visible
-    to a reader.
+    """Atomically demotes the current `production` model *for the same
+    `model_name`* (if any, and if it isn't already `model_id`) to `"archived"` and
+    promotes `model_id` to `"production"` — the invariant ("at most one item has
+    stage=production per model_name") enforced structurally via a single
+    `transact_write_items` call, not by convention: there's never a moment with
+    zero or two production models visible to a reader for the same model family.
+    Promoting one model_name's model never touches another model_name's production
+    item — that's the whole point of per-name scoping.
 
     Raises (`ClientError`, `ConditionalCheckFailedException` inside
     `TransactionCanceledException`) if `model_id` doesn't exist.
     """
+    # A nonexistent model_id leaves model_name as None here — the transaction's own
+    # ConditionExpression below raises the same error it always has for that case,
+    # rather than a different one here.
+    target = get_model(client, table_name, model_id)
+    model_name: str | None = None
+    if target is not None:
+        target_model_name = target["model_name"]
+        assert isinstance(target_model_name, str)
+        model_name = target_model_name
+
     now = datetime.now(UTC).isoformat()
-    current_production = get_production_model(client, table_name)
+    current_production = (
+        get_production_model_by_name(client, table_name, model_name)
+        if model_name is not None
+        else None
+    )
 
     transact_items: list[dict[str, object]] = [
         {

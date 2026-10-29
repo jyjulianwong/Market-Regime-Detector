@@ -119,10 +119,11 @@ classDiagram
         ModelStage
         put_model_item(client, table, item)
         get_model(client, table, model_id)
-        get_production_model(client, table)
+        get_production_model_by_name(client, table, model_name)
         list_models_by_stage(client, table, stage)
         list_all_models(client, table)
         promote_model(client, table, model_id)
+        note: "production" is scoped per model_name<br/>(model_name-index GSI) — not table-wide
     }
 
     class FeatureDefinition {
@@ -404,7 +405,8 @@ classDiagram
     class publisher {
         <<module publisher.py>>
         PublishStage
-        publish_model(local_dir, manifest, s3, bucket, ddb, table, stage) model_id
+        publish_model(local_dir, model_name, manifest, s3, bucket, ddb, table, stage) model_id
+        model_id = model_name-YYYYMMDD-gitsha
     }
     class promote {
         <<module promote.py>>
@@ -467,6 +469,7 @@ classDiagram
         handler(event, context) dict
         action ingest → _handle_ingest
         action predict → _handle_predict
+        no model_id/model_name in event → fans out over<br/>every model_name currently in production
     }
 
     class HMMArtifact {
@@ -487,12 +490,13 @@ classDiagram
     }
     class model_loader {
         <<module model_loader.py>>
-        load_model_artifact(s3, bucket, model_id) ModelArtifact
+        load_model_artifact(s3, bucket, model_name, model_id) ModelArtifact
     }
 
     class PredictionResult {
         <<dataclass>>
         model_id
+        model_name
         dataset_id
         asof
         generated_at
@@ -504,7 +508,8 @@ classDiagram
     class predict {
         <<module predict.py>>
         DEFAULT_LOOKBACK_DAYS = 730
-        run_prediction(s3, ddb, bucket, table, model_id, source, start, end, asof) PredictionResult
+        run_prediction(s3, ddb, bucket, table, model_id, model_name, source, start, end, asof) PredictionResult
+        model_id pins an exact version; model_name resolves<br/>to that family's production model; one of the two is required
         _axis_posteriors() monthly filter + daily preview
     }
     class outputs {
@@ -521,7 +526,7 @@ classDiagram
     predict --> PredictionResult
     model_loader --> ModelArtifact
     ModelArtifact "1" *-- "2" HMMArtifact
-    predict ..> common_registry : get_model / get_production_model
+    predict ..> common_registry : get_model / get_production_model_by_name
     predict ..> common_features : build_feature_value
     predict ..> forward_filter : filtered_posterior (month-ends), preview_posterior (days)
     predict ..> quadrants : quadrant_probabilities
@@ -572,8 +577,9 @@ classDiagram
         GET /health
         GET /models
         GET /models/model_id
-        GET /predictions/latest
-        GET /predictions/history
+        GET /models/model_name/predictions/latest
+        GET /models/model_name/predictions/history
+        model_id stays an optional query param on both,<br/>to pin an exact version instead of that<br/>family's current production model
     }
     class schemas {
         <<module schemas.py · pydantic>>
@@ -588,9 +594,10 @@ classDiagram
     class reads {
         <<module reads.py>>
         cached_get_model(table, id)
-        cached_get_production_model(table)
+        cached_get_production_model_by_name(table, model_name)
         cached_list_models(table, stage)
-        resolve_model(table, model_id)
+        resolve_model_by_name(table, model_name, model_id)
+        a model_id from a different family than model_name<br/>resolves to None (caller turns that into 404)
         cached_read_json(bucket, key)
     }
     class TTLCache {
@@ -648,10 +655,10 @@ flowchart TB
     end
 
     LOCAL["Local model dir<br/>growth_hmm.npz · inflation_hmm.npz · scalers.npz<br/>labels.json · config.json · metrics.json · model_card.md"]
-    MODELS[("S3 models/model_id/")]
+    MODELS[("S3 models/model_name/model_id/")]
     MANI[("S3 datasets/dataset_id/manifest.json")]
-    REG[("DynamoDB registry<br/>model_id → stage")]
-    PROMO["promote_model()<br/>stage → production"]
+    REG[("DynamoDB registry<br/>model_id → stage, model_name<br/>one production item per model_name")]
+    PROMO["promote_model()<br/>stage → production<br/>(scoped to the target's own model_name)"]
 
     subgraph pred["Prediction — prediction/ (batch Lambda)"]
         LOAD["load_model_artifact()"]
@@ -661,7 +668,7 @@ flowchart TB
         OUT["write_prediction_outputs()"]
     end
 
-    PRED[("S3 predictions/model_id=ID/<br/>latest.json · history.json · snapshots/asof=DATE.json")]
+    PRED[("S3 predictions/model_name=NAME/model_id=ID/<br/>latest.json · history.json · snapshots/asof=DATE.json")]
 
     subgraph api["API — server/ (server Lambda)"]
         ROUTES["FastAPI /v1 routes<br/>+ TTL cache"]
@@ -703,7 +710,7 @@ Schedules (EventBridge → batch Lambda, see `terraform/main.tf`):
 | Rule | Cadence | Event | Does |
 |---|---|---|---|
 | ingest | Mon–Fri 04:00 UTC | `{"action": "ingest"}` | `ingest_incremental` for every series in `FIRST_PASS_SERIES` (per-series failures logged, not fatal) |
-| predict | Mon–Fri 06:00 UTC | `{"action": "predict"}` | `run_prediction` off the lake, then `write_prediction_outputs`; **never ingests** |
+| predict | Mon–Fri 06:00 UTC | `{"action": "predict"}` | fans out over every `model_name` currently in production; `run_prediction` off the lake + `write_prediction_outputs` per family; **never ingests** |
 
 ### 3.2 Ingestion sequence
 
@@ -780,15 +787,15 @@ sequenceDiagram
     BM-->>TM: writes 7 files to output-dir
     TM-->>Dev: model dir + dataset manifest
 
-    Dev->>PM: publish (stage = staging by default)
-    PM->>PB: publish_model(local_dir, manifest, ...)
-    PB->>PB: model_id = mrd-YYYYMMDD-gitsha
-    PB->>S3: upload models/model_id/*
+    Dev->>PM: publish --model-name NAME (stage = staging by default)
+    PM->>PB: publish_model(local_dir, model_name, manifest, ...)
+    PB->>PB: model_id = model_name-YYYYMMDD-gitsha
+    PB->>S3: upload models/model_name/model_id/*
     PB->>S3: put datasets/dataset_id/manifest.json
-    PB->>REG: put_model_item(stage=staging)
+    PB->>REG: put_model_item(model_name, stage=staging)
 
     Dev->>PR: promote model_id
-    PR->>REG: promote_model() → production (previous one demoted)
+    PR->>REG: promote_model() → production<br/>(only that model_id's own model_name's previous production item demoted)
     PR-->>PR: invoke_batch_lambda_best_effort(model_id)
 ```
 
@@ -845,11 +852,12 @@ sequenceDiagram
     participant API as server routes
     participant C as TTLCache
 
-    EB->>H: {"action": "predict"} or {"model_id": ...}
-    H->>RP: run_prediction(model_id?, source="lake")
-    RP->>REG: get_production_model() or get_model(model_id)
-    RP->>ML: load_model_artifact(model_id)
-    ML->>S3: models/model_id/{labels,config}.json, *.npz
+    EB->>H: {"action": "predict"} (no model_id/model_name) or<br/>{"model_id": ...} / {"model_name": ...}
+    Note over H: no model_id/model_name → list every model_name<br/>currently in production, loop below runs once per family
+    H->>RP: run_prediction(model_id?, model_name?, source="lake")
+    RP->>REG: get_model(model_id) or get_production_model_by_name(model_name)
+    RP->>ML: load_model_artifact(model_name, model_id)
+    ML->>S3: models/model_name/model_id/{labels,config}.json, *.npz
     ML-->>RP: ModelArtifact (no pickle)
     RP->>S3: read_series() for each series in feature_config
     Note over RP: Per series: stale if latest realtime_start is older<br/>than its frequency tolerance (3d / 10d / 40d)
@@ -858,13 +866,16 @@ sequenceDiagram
     RP->>RP: p_growth_up, p_inflation_up → quadrant_probabilities(), argmax → regime + confidence
     RP-->>H: PredictionResult
     H->>OUT: write_prediction_outputs()
-    OUT->>S3: predictions/model_id=ID/latest.json (overwrite)
-    OUT->>S3: predictions/model_id=ID/history.json (overwrite)
+    OUT->>S3: predictions/model_name=NAME/model_id=ID/latest.json (overwrite)
+    OUT->>S3: predictions/model_name=NAME/model_id=ID/history.json (overwrite)
     OUT->>S3: snapshots/asof=DATE.json (write-once)
+    Note over H: repeats once per model_name when the event had neither key;<br/>each family's failure is caught/logged independently
 
-    Browser->>API: GET /v1/predictions/latest
-    API->>C: resolve_model() — cached production model
-    C->>REG: get_production_model() on miss
+    Browser->>API: GET /v1/models?stage=production
+    API-->>Browser: distinct model_name values populate the <select><br/>(URL ?model= / localStorage picks the initial one)
+    Browser->>API: GET /v1/models/NAME/predictions/latest
+    API->>C: resolve_model_by_name(NAME) — cached production model for NAME
+    C->>REG: get_production_model_by_name(NAME) on miss
     API->>C: cached_read_json(latest.json)
     C->>S3: GetObject on miss
     API->>API: is_stale ||= generated_at older than 36h
@@ -881,11 +892,11 @@ One versioned S3 bucket (`Settings.s3_bucket_name`) plus one DynamoDB table.
 |---|---|---|---|
 | `s3://…/data/asset=<series_id>/year=<yyyy>/data.parquet` | `ingestion/lake.py::write_to_lake` | `read_series` (training, prediction) | Raw vintaged observations: `date, value, realtime_start, source, series_id, ingested_at` |
 | `s3://…/datasets/<dataset_id>/manifest.json` | `training/publisher.py` | humans, audits | Dataset id, feature-config hash, date range, per-asset row counts and date ranges, warnings |
-| `s3://…/models/<model_id>/` | `training/publisher.py` | `prediction/model_loader.py` | `growth_hmm.npz`, `inflation_hmm.npz`, `scalers.npz`, `labels.json`, `config.json`, `metrics.json`, `model_card.md` |
-| `s3://…/predictions/model_id=<id>/latest.json` | `prediction/outputs.py` | `server/routes.py` | Latest quadrant probabilities, regime, confidence |
-| `s3://…/predictions/model_id=<id>/history.json` | `prediction/outputs.py` | `server/routes.py` | Daily history over the lookback window |
-| `s3://…/predictions/model_id=<id>/snapshots/asof=<date>.json` | `prediction/outputs.py` | humans | Write-once record of what was published for that as-of date |
-| DynamoDB `models` table | `common/model_registry.py` (publisher, promote script) | `prediction/predict.py`, `server/reads.py` | `model_id` → `stage` (`development`/`staging`/`production`/`archived`), `dataset_id`, S3 URIs, summary metrics. Exactly one `production` item. |
+| `s3://…/models/<model_name>/<model_id>/` | `training/publisher.py` | `prediction/model_loader.py` | `growth_hmm.npz`, `inflation_hmm.npz`, `scalers.npz`, `labels.json`, `config.json`, `metrics.json`, `model_card.md` |
+| `s3://…/predictions/model_name=<name>/model_id=<id>/latest.json` | `prediction/outputs.py` | `server/routes.py` | Latest quadrant probabilities, regime, confidence |
+| `s3://…/predictions/model_name=<name>/model_id=<id>/history.json` | `prediction/outputs.py` | `server/routes.py` | Daily history over the lookback window |
+| `s3://…/predictions/model_name=<name>/model_id=<id>/snapshots/asof=<date>.json` | `prediction/outputs.py` | humans | Write-once record of what was published for that as-of date |
+| DynamoDB `models` table | `common/model_registry.py` (publisher, promote script) | `prediction/predict.py`, `server/reads.py` | `model_id` → `stage` (`development`/`staging`/`production`/`archived`), `model_name`, `dataset_id`, S3 URIs, summary metrics. Exactly one `production` item **per `model_name`** (GSI `model_name-index`, hash key `model_name`, range key `stage`) — not table-wide. |
 
 ---
 
@@ -904,6 +915,8 @@ One versioned S3 bucket (`Settings.s3_bucket_name`) plus one DynamoDB table.
 | Evaluate a new `FeatureConfig` version | Register it in `common/feature_config.py`'s `FEATURE_CONFIGS` dict, then `scripts/evaluate_model.py --feature-config <version>` — no other script change needed |
 | Change the published JSON shape | `prediction/outputs.py` **and** `server/schemas.py` (keep in sync) |
 | Add an API endpoint | `server/routes.py`, `server/schemas.py`, `server/reads.py` |
+| Publish a new model family | `scripts/publish_model.py --model-name <name>` (slug: lowercase, hyphen-separated) — every model family still produces the same growth/inflation quadrant output shape; a genuinely different domain would need `common/quadrants.py` and the output schema genericized, which hasn't been done |
+| Add the client's model selector to a new page/feature | `client/index.html`'s `init()`/`pickInitialModel()`/`persistSelectedModel()` — fetches `GET /v1/models?stage=production`, dedupes to `model_name` |
 | Change schedules, IAM, Lambdas | `terraform/main.tf`, `docker/batch-lambda.Dockerfile`, `scripts/package_lambda.sh` |
 | Change CI/CD | `.github/workflows/deploy-terraform.yml`, `deploy-client.yml` |
 | Run something by hand | `scripts/` — `ingest_data.py`, `train_model.py`, `evaluate_model.py`, `publish_model.py`, `promote_model.py`, `run_prediction.py` (thin wrappers, no logic of their own) |

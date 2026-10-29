@@ -48,10 +48,13 @@ def _history_df(dates: list[str]) -> pd.DataFrame:
 
 
 def _result(
-    model_id: str = "mrd-20260101-abcdef12", asof: date = date(2024, 1, 20)
+    model_id: str = "mrd-20260101-abcdef12",
+    model_name: str = "allweather-hmm2naive-us",
+    asof: date = date(2024, 1, 20),
 ) -> PredictionResult:
     return PredictionResult(
         model_id=model_id,
+        model_name=model_name,
         dataset_id="ds-test",
         asof=asof,
         generated_at=datetime(2024, 1, 20, 6, 30, tzinfo=UTC),
@@ -68,6 +71,7 @@ def test_to_latest_json_shape() -> None:
     latest_json = to_latest_json(result)
 
     assert latest_json["model_id"] == "mrd-20260101-abcdef12"
+    assert latest_json["model_name"] == "allweather-hmm2naive-us"
     assert latest_json["dataset_id"] == "ds-test"
     assert latest_json["observation_date"] == "2024-01-20"
     assert latest_json["is_stale"] is False
@@ -115,7 +119,7 @@ def test_write_prediction_outputs_always_overwrites_latest_and_history(
     write_prediction_outputs(s3_client, BUCKET, _result())
     write_prediction_outputs(s3_client, BUCKET, _result())  # same asof, re-run
 
-    prefix = "predictions/model_id=mrd-20260101-abcdef12"
+    prefix = "predictions/model_name=allweather-hmm2naive-us/model_id=mrd-20260101-abcdef12"
     latest = json.loads(
         s3_client.get_object(Bucket=BUCKET, Key=f"{prefix}/latest.json")["Body"].read()
     )
@@ -123,7 +127,7 @@ def test_write_prediction_outputs_always_overwrites_latest_and_history(
 
 
 def test_write_prediction_outputs_snapshot_is_write_once(s3_client: S3Client) -> None:
-    prefix = "predictions/model_id=mrd-20260101-abcdef12"
+    prefix = "predictions/model_name=allweather-hmm2naive-us/model_id=mrd-20260101-abcdef12"
     snapshot_key = f"{prefix}/snapshots/asof=2024-01-20.json"
 
     first_result = _result()
@@ -152,7 +156,7 @@ def test_write_prediction_outputs_different_asof_gets_its_own_snapshot(
     write_prediction_outputs(s3_client, BUCKET, _result(asof=date(2024, 1, 20)))
     write_prediction_outputs(s3_client, BUCKET, _result(asof=date(2024, 1, 21)))
 
-    prefix = "predictions/model_id=mrd-20260101-abcdef12"
+    prefix = "predictions/model_name=allweather-hmm2naive-us/model_id=mrd-20260101-abcdef12"
     keys = {
         obj["Key"]
         for obj in s3_client.list_objects_v2(Bucket=BUCKET, Prefix=f"{prefix}/snapshots/").get(

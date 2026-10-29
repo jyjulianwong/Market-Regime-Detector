@@ -17,6 +17,7 @@ BUCKET = settings.s3_bucket_name
 TABLE_NAME = settings.dynamodb_table_name
 
 client = TestClient(app)
+MODEL_NAME = "allweather-hmm2naive-us"
 
 
 @pytest.fixture(autouse=True)
@@ -35,6 +36,7 @@ def aws() -> Generator[None, None, None]:
                 {"AttributeName": "model_id", "AttributeType": "S"},
                 {"AttributeName": "stage", "AttributeType": "S"},
                 {"AttributeName": "last_modified", "AttributeType": "S"},
+                {"AttributeName": "model_name", "AttributeType": "S"},
             ],
             GlobalSecondaryIndexes=[
                 {
@@ -45,16 +47,26 @@ def aws() -> Generator[None, None, None]:
                     ],
                     "Projection": {"ProjectionType": "ALL"},
                     "ProvisionedThroughput": {"ReadCapacityUnits": 5, "WriteCapacityUnits": 5},
-                }
+                },
+                {
+                    "IndexName": "model_name-index",
+                    "KeySchema": [
+                        {"AttributeName": "model_name", "KeyType": "HASH"},
+                        {"AttributeName": "stage", "KeyType": "RANGE"},
+                    ],
+                    "Projection": {"ProjectionType": "ALL"},
+                    "ProvisionedThroughput": {"ReadCapacityUnits": 5, "WriteCapacityUnits": 5},
+                },
             ],
             BillingMode="PAY_PER_REQUEST",
         )
         yield
 
 
-def _registry_item(model_id: str, stage: str) -> dict[str, object]:
+def _registry_item(model_id: str, stage: str, model_name: str = MODEL_NAME) -> dict[str, object]:
     return {
         "model_id": model_id,
+        "model_name": model_name,
         "dataset_id": "ds-test",
         "stage": stage,
         "last_modified": "2024-01-01T00:00:00",
@@ -65,16 +77,16 @@ def _registry_item(model_id: str, stage: str) -> dict[str, object]:
         "n_assets": 9,
         "git_sha": None,
         "vintage_aware": True,
-        "model_s3_uri": f"s3://{BUCKET}/models/{model_id}/",
+        "model_s3_uri": f"s3://{BUCKET}/models/{model_name}/{model_id}/",
         "manifest_s3_uri": f"s3://{BUCKET}/datasets/ds-test/manifest.json",
         "metrics_summary": {"growth_log_likelihood": Decimal("-100.0")},
         "hmm_config_summary": {"n_states": 2, "covariance_type": "diag", "n_restarts": 10},
     }
 
 
-def _put_registry_item(model_id: str, stage: str) -> None:
+def _put_registry_item(model_id: str, stage: str, model_name: str = MODEL_NAME) -> None:
     dynamodb = boto3.client("dynamodb", region_name=settings.aws_region)
-    put_model_item(dynamodb, TABLE_NAME, _registry_item(model_id, stage))
+    put_model_item(dynamodb, TABLE_NAME, _registry_item(model_id, stage, model_name))
 
 
 def _promote(model_id: str) -> None:
@@ -82,9 +94,12 @@ def _promote(model_id: str) -> None:
     promote_model(dynamodb, TABLE_NAME, model_id)
 
 
-def _latest_json(model_id: str, generated_at: str, is_stale: bool = False) -> dict[str, object]:
+def _latest_json(
+    model_id: str, generated_at: str, is_stale: bool = False, model_name: str = MODEL_NAME
+) -> dict[str, object]:
     return {
         "model_id": model_id,
+        "model_name": model_name,
         "dataset_id": "ds-test",
         "asof": "2024-01-20",
         "generated_at": generated_at,
@@ -107,7 +122,7 @@ def _latest_json(model_id: str, generated_at: str, is_stale: bool = False) -> di
     }
 
 
-def _history_json(model_id: str) -> dict[str, object]:
+def _history_json(model_id: str, model_name: str = MODEL_NAME) -> dict[str, object]:
     record = {
         "date": "2024-01-20",
         "p_growth_up": 0.7,
@@ -123,23 +138,27 @@ def _history_json(model_id: str) -> dict[str, object]:
     }
     return {
         "model_id": model_id,
+        "model_name": model_name,
         "dataset_id": "ds-test",
         "generated_at": "2024-01-20T06:30:00+00:00",
         "history": [record, {**record, "date": "2024-01-21"}],
     }
 
 
-def _put_predictions(model_id: str, generated_at: str, is_stale: bool = False) -> None:
+def _put_predictions(
+    model_id: str, generated_at: str, is_stale: bool = False, model_name: str = MODEL_NAME
+) -> None:
     s3 = boto3.client("s3", region_name=settings.aws_region)
+    prefix = f"predictions/model_name={model_name}/model_id={model_id}"
     s3.put_object(
         Bucket=BUCKET,
-        Key=f"predictions/model_id={model_id}/latest.json",
-        Body=json.dumps(_latest_json(model_id, generated_at, is_stale)).encode(),
+        Key=f"{prefix}/latest.json",
+        Body=json.dumps(_latest_json(model_id, generated_at, is_stale, model_name)).encode(),
     )
     s3.put_object(
         Bucket=BUCKET,
-        Key=f"predictions/model_id={model_id}/history.json",
-        Body=json.dumps(_history_json(model_id)).encode(),
+        Key=f"{prefix}/history.json",
+        Body=json.dumps(_history_json(model_id, model_name)).encode(),
     )
 
 
@@ -187,16 +206,17 @@ def test_get_model_detail_404_for_unknown_model() -> None:
     assert response.status_code == 404
 
 
-def test_get_latest_prediction_defaults_to_production_model() -> None:
+def test_get_latest_prediction_resolves_production_model_by_name() -> None:
     _put_registry_item("mrd-1", "staging")
     _promote("mrd-1")
     _put_predictions("mrd-1", datetime.now(UTC).isoformat())
 
-    response = client.get("/v1/predictions/latest")
+    response = client.get(f"/v1/models/{MODEL_NAME}/predictions/latest")
 
     assert response.status_code == 200
     body = response.json()
     assert body["model_id"] == "mrd-1"
+    assert body["model_name"] == MODEL_NAME
     assert body["latest"]["regime"] == "GROWTH_UP_INFLATION_DOWN"
     assert body["disclaimer"] == "Descriptive regime information only; not investment advice."
     assert body["is_stale"] is False
@@ -208,20 +228,38 @@ def test_get_latest_prediction_honors_explicit_model_id() -> None:
     _promote("mrd-1")
     _put_predictions("mrd-2", datetime.now(UTC).isoformat())
 
-    response = client.get("/v1/predictions/latest", params={"model_id": "mrd-2"})
+    response = client.get(
+        f"/v1/models/{MODEL_NAME}/predictions/latest", params={"model_id": "mrd-2"}
+    )
 
     assert response.status_code == 200
     assert response.json()["model_id"] == "mrd-2"
 
 
 def test_get_latest_prediction_404_when_model_unknown() -> None:
-    response = client.get("/v1/predictions/latest", params={"model_id": "does-not-exist"})
+    response = client.get(
+        f"/v1/models/{MODEL_NAME}/predictions/latest", params={"model_id": "does-not-exist"}
+    )
+
+    assert response.status_code == 404
+
+
+def test_get_latest_prediction_404_when_model_id_belongs_to_a_different_family() -> None:
+    _put_registry_item("mrd-eu-1", "staging", model_name="allweather-hmm2naive-eu")
+    _promote("mrd-eu-1")
+    _put_predictions(
+        "mrd-eu-1", datetime.now(UTC).isoformat(), model_name="allweather-hmm2naive-eu"
+    )
+
+    response = client.get(
+        f"/v1/models/{MODEL_NAME}/predictions/latest", params={"model_id": "mrd-eu-1"}
+    )
 
     assert response.status_code == 404
 
 
 def test_get_latest_prediction_404_when_no_production_model() -> None:
-    response = client.get("/v1/predictions/latest")
+    response = client.get(f"/v1/models/{MODEL_NAME}/predictions/latest")
 
     assert response.status_code == 404
 
@@ -234,7 +272,7 @@ def test_get_latest_prediction_404_when_model_exists_but_has_no_predictions() ->
     _promote("mrd-1")
     # No latest.json ever written.
 
-    response = client.get("/v1/predictions/latest")
+    response = client.get(f"/v1/models/{MODEL_NAME}/predictions/latest")
 
     assert response.status_code == 404
     assert "no predictions exist" in response.json()["detail"]
@@ -246,7 +284,7 @@ def test_get_latest_prediction_marks_stale_when_generated_at_is_old() -> None:
     old_timestamp = (datetime.now(UTC) - timedelta(hours=100)).isoformat()
     _put_predictions("mrd-1", old_timestamp, is_stale=False)  # batch itself said fresh
 
-    response = client.get("/v1/predictions/latest")
+    response = client.get(f"/v1/models/{MODEL_NAME}/predictions/latest")
 
     body = response.json()
     assert body["is_stale"] is True
@@ -258,7 +296,7 @@ def test_get_prediction_history_default() -> None:
     _promote("mrd-1")
     _put_predictions("mrd-1", datetime.now(UTC).isoformat())
 
-    response = client.get("/v1/predictions/history")
+    response = client.get(f"/v1/models/{MODEL_NAME}/predictions/history")
 
     assert response.status_code == 200
     body = response.json()
@@ -272,7 +310,8 @@ def test_get_prediction_history_filters_by_date_range() -> None:
     _put_predictions("mrd-1", datetime.now(UTC).isoformat())
 
     response = client.get(
-        "/v1/predictions/history", params={"start": "2024-01-21", "end": "2024-01-21"}
+        f"/v1/models/{MODEL_NAME}/predictions/history",
+        params={"start": "2024-01-21", "end": "2024-01-21"},
     )
 
     body = response.json()
@@ -284,6 +323,6 @@ def test_get_prediction_history_404_when_no_predictions_exist() -> None:
     _put_registry_item("mrd-1", "staging")
     _promote("mrd-1")
 
-    response = client.get("/v1/predictions/history")
+    response = client.get(f"/v1/models/{MODEL_NAME}/predictions/history")
 
     assert response.status_code == 404

@@ -16,6 +16,7 @@ class ModelSummaryResponse(BaseModel):
     """
 
     model_id: str
+    model_name: str
     dataset_id: str
     stage: str
     last_modified: str
@@ -55,6 +56,7 @@ class LatestPredictionResponse(BaseModel):
     """
 
     model_id: str
+    model_name: str
     dataset_id: str
     asof: date
     generated_at: datetime
@@ -81,6 +83,7 @@ class HistoryResponse(BaseModel):
     """
 
     model_id: str
+    model_name: str
     dataset_id: str
     generated_at: datetime
     history: list[HistoryRecord]

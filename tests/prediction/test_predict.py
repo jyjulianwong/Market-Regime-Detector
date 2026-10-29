@@ -29,6 +29,7 @@ from market_regime_detector.prediction.predict import (
 
 BUCKET = "test-bucket"
 TABLE_NAME = "test-registry"
+MODEL_NAME = "allweather-hmm2naive-us"
 MODEL_ID = "mrd-20260101-abcdef12"
 
 START_PROB = np.array([0.6, 0.4])
@@ -53,6 +54,7 @@ def aws() -> Generator[tuple[S3Client, DynamoDBClient], None, None]:
                 {"AttributeName": "model_id", "AttributeType": "S"},
                 {"AttributeName": "stage", "AttributeType": "S"},
                 {"AttributeName": "last_modified", "AttributeType": "S"},
+                {"AttributeName": "model_name", "AttributeType": "S"},
             ],
             GlobalSecondaryIndexes=[
                 {
@@ -63,7 +65,16 @@ def aws() -> Generator[tuple[S3Client, DynamoDBClient], None, None]:
                     ],
                     "Projection": {"ProjectionType": "ALL"},
                     "ProvisionedThroughput": {"ReadCapacityUnits": 5, "WriteCapacityUnits": 5},
-                }
+                },
+                {
+                    "IndexName": "model_name-index",
+                    "KeySchema": [
+                        {"AttributeName": "model_name", "KeyType": "HASH"},
+                        {"AttributeName": "stage", "KeyType": "RANGE"},
+                    ],
+                    "Projection": {"ProjectionType": "ALL"},
+                    "ProvisionedThroughput": {"ReadCapacityUnits": 5, "WriteCapacityUnits": 5},
+                },
             ],
             BillingMode="PAY_PER_REQUEST",
         )
@@ -110,7 +121,7 @@ def _put_npz(s3: S3Client, key: str, **arrays: np.ndarray) -> None:
 
 
 def _publish_fake_model(s3: S3Client) -> None:
-    prefix = f"models/{MODEL_ID}"
+    prefix = f"models/{MODEL_NAME}/{MODEL_ID}"
     _put_npz(
         s3,
         f"{prefix}/growth_hmm.npz",
@@ -177,6 +188,7 @@ def _publish_and_promote(dynamodb: DynamoDBClient) -> None:
         TABLE_NAME,
         {
             "model_id": MODEL_ID,
+            "model_name": MODEL_NAME,
             "dataset_id": "ds-test",
             "stage": "staging",
             "last_modified": "2024-01-01T00:00:00",
@@ -210,6 +222,7 @@ def _run_monthly_fixture_prediction(s3: S3Client, dynamodb: DynamoDBClient) -> P
         dynamodb,
         BUCKET,
         TABLE_NAME,
+        model_name=MODEL_NAME,
         start=date(2023, 11, 1),
         end=date(2024, 2, 29),
         asof=date(2024, 2, 29),
@@ -324,7 +337,7 @@ def test_run_prediction_drops_days_with_no_prior_month_end_anchor(
     assert pd.Timestamp("2023-11-15") not in result.history.index
 
 
-def test_run_prediction_defaults_to_production_model(
+def test_run_prediction_resolves_production_model_by_name(
     aws: tuple[S3Client, DynamoDBClient],
 ) -> None:
     s3, dynamodb = aws
@@ -335,10 +348,17 @@ def test_run_prediction_defaults_to_production_model(
     _publish_and_promote(dynamodb)
 
     result = run_prediction(
-        s3, dynamodb, BUCKET, TABLE_NAME, start=date(2024, 1, 1), end=date(2024, 1, 10)
+        s3,
+        dynamodb,
+        BUCKET,
+        TABLE_NAME,
+        model_name=MODEL_NAME,
+        start=date(2024, 1, 1),
+        end=date(2024, 1, 10),
     )
 
     assert result.model_id == MODEL_ID
+    assert result.model_name == MODEL_NAME
 
 
 def test_run_prediction_honors_explicit_model_id(aws: tuple[S3Client, DynamoDBClient]) -> None:
@@ -352,6 +372,7 @@ def test_run_prediction_honors_explicit_model_id(aws: tuple[S3Client, DynamoDBCl
         TABLE_NAME,
         {
             "model_id": MODEL_ID,
+            "model_name": MODEL_NAME,
             "dataset_id": "ds-test",
             "stage": "staging",
             "last_modified": "2024-01-01T00:00:00",
@@ -372,13 +393,22 @@ def test_run_prediction_honors_explicit_model_id(aws: tuple[S3Client, DynamoDBCl
     assert result.model_id == MODEL_ID
 
 
-def test_run_prediction_raises_when_no_production_model_exists(
+def test_run_prediction_raises_when_neither_model_id_nor_model_name_given(
+    aws: tuple[S3Client, DynamoDBClient],
+) -> None:
+    s3, dynamodb = aws
+
+    with pytest.raises(ValueError, match="either model_id or model_name"):
+        run_prediction(s3, dynamodb, BUCKET, TABLE_NAME)
+
+
+def test_run_prediction_raises_when_no_production_model_exists_for_name(
     aws: tuple[S3Client, DynamoDBClient],
 ) -> None:
     s3, dynamodb = aws
 
     with pytest.raises(ValueError, match="no production model"):
-        run_prediction(s3, dynamodb, BUCKET, TABLE_NAME)
+        run_prediction(s3, dynamodb, BUCKET, TABLE_NAME, model_name=MODEL_NAME)
 
 
 def test_run_prediction_raises_for_unknown_model_id(
@@ -414,6 +444,7 @@ def test_run_prediction_is_stale_when_raw_inputs_lag_asof(
         dynamodb,
         BUCKET,
         TABLE_NAME,
+        model_name=MODEL_NAME,
         start=date(2024, 1, 1),
         end=date(2024, 3, 1),
         asof=date(2024, 3, 1),  # 51 days after the last available observation
@@ -485,7 +516,13 @@ def test_run_prediction_warns_when_a_series_has_no_data(
     _publish_and_promote(dynamodb)
 
     result = run_prediction(
-        s3, dynamodb, BUCKET, TABLE_NAME, start=date(2024, 1, 1), end=date(2024, 1, 10)
+        s3,
+        dynamodb,
+        BUCKET,
+        TABLE_NAME,
+        model_name=MODEL_NAME,
+        start=date(2024, 1, 1),
+        end=date(2024, 1, 10),
     )
 
     assert any("INFLATION_SERIES" in w for w in result.warnings)

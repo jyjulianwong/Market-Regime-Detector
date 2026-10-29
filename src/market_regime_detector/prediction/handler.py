@@ -1,15 +1,22 @@
 import logging
 from datetime import date
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from market_regime_detector.common.aws_dynamodb import get_dynamodb_client
 from market_regime_detector.common.aws_s3 import get_s3_client
 from market_regime_detector.common.logging import configure_logging
+from market_regime_detector.common.model_registry import list_models_by_stage
 from market_regime_detector.common.settings import Settings, get_settings
 from market_regime_detector.ingestion.ingest import ingest_incremental
 from market_regime_detector.ingestion.series_catalog import FIRST_PASS_SERIES
 from market_regime_detector.prediction.outputs import write_prediction_outputs
 from market_regime_detector.prediction.predict import run_prediction
+
+if TYPE_CHECKING:
+    # boto3-stubs is dev-only (see pyproject.toml) — never installed in a deployed
+    # Lambda, so this import must not run at runtime, only during type-checking.
+    from mypy_boto3_dynamodb.client import DynamoDBClient
+    from mypy_boto3_s3.client import S3Client
 
 logger = logging.getLogger(__name__)
 
@@ -41,24 +48,24 @@ def _handle_ingest(event: dict[str, Any], settings: Settings) -> dict[str, objec
     return result
 
 
-def _handle_predict(event: dict[str, Any], settings: Settings) -> dict[str, object]:
-    """Daily-scheduled action: nowcast off whatever's already in the lake — never
-    triggers ingestion itself (see the `ingest` action above for that).
-    """
-    model_id = event.get("model_id")
-    source = event.get("source", "lake")
-    start = _parse_date(event, "start")
-    end = _parse_date(event, "end")
-    asof = _parse_date(event, "asof")
-
-    s3 = get_s3_client()
-    dynamodb = get_dynamodb_client()
+def _run_and_write_one(
+    s3: "S3Client",
+    dynamodb: "DynamoDBClient",
+    settings: Settings,
+    model_id: str | None,
+    model_name: str | None,
+    source: str,
+    start: date | None,
+    end: date | None,
+    asof: date | None,
+) -> dict[str, object]:
     result = run_prediction(
         s3,
         dynamodb,
         settings.s3_bucket_name,
         settings.dynamodb_table_name,
         model_id=model_id,
+        model_name=model_name,
         source=source,
         start=start,
         end=end,
@@ -67,18 +74,84 @@ def _handle_predict(event: dict[str, Any], settings: Settings) -> dict[str, obje
     write_prediction_outputs(s3, settings.s3_bucket_name, result)
 
     logger.info(
-        "prediction written for model %s, observation_date=%s, is_stale=%s",
+        "prediction written for model_name=%s model_id=%s, observation_date=%s, is_stale=%s",
+        result.model_name,
         result.model_id,
         result.observation_date,
         result.is_stale,
     )
     return {
         "model_id": result.model_id,
+        "model_name": result.model_name,
         "observation_date": result.observation_date.isoformat()
         if result.observation_date is not None
         else None,
         "is_stale": result.is_stale,
     }
+
+
+def _handle_predict(event: dict[str, Any], settings: Settings) -> dict[str, object]:
+    """Daily-scheduled action: nowcast off whatever's already in the lake — never
+    triggers ingestion itself (see the `ingest` action above for that).
+
+    Multi-model support: an explicit `model_id` or `model_name` in the event (e.g.
+    `scripts/promote_model.py`'s best-effort async invoke, which sends one
+    `model_id`) predicts for exactly that one model. The default EventBridge
+    schedule sends neither, so this fans out — one `run_prediction` +
+    `write_prediction_outputs` call per `model_name` currently in production,
+    found via the existing `stage-index` GSI (`list_models_by_stage`). Each
+    family's failure is caught and logged individually, same resilience pattern as
+    `_handle_ingest`'s per-series loop, so one broken model never blocks another's
+    daily output.
+    """
+    model_id = event.get("model_id")
+    model_name = event.get("model_name")
+    source = event.get("source", "lake")
+    start = _parse_date(event, "start")
+    end = _parse_date(event, "end")
+    asof = _parse_date(event, "asof")
+
+    s3 = get_s3_client()
+    dynamodb = get_dynamodb_client()
+
+    if model_id is not None or model_name is not None:
+        targets: list[tuple[str | None, str | None]] = [(model_id, model_name)]
+    else:
+        production_items = list_models_by_stage(
+            dynamodb, settings.dynamodb_table_name, "production"
+        )
+        targets = []
+        for item in production_items:
+            production_model_name = item["model_name"]
+            assert isinstance(production_model_name, str)
+            targets.append((None, production_model_name))
+
+    results: list[dict[str, object]] = []
+    failed: list[str | None] = []
+    for target_model_id, target_model_name in targets:
+        try:
+            results.append(
+                _run_and_write_one(
+                    s3,
+                    dynamodb,
+                    settings,
+                    target_model_id,
+                    target_model_name,
+                    source,
+                    start,
+                    end,
+                    asof,
+                )
+            )
+        except Exception:
+            logger.exception(
+                "prediction failed for model_name=%r model_id=%r",
+                target_model_name,
+                target_model_id,
+            )
+            failed.append(target_model_name or target_model_id)
+
+    return {"results": results, "failed": failed}
 
 
 _ACTIONS = {

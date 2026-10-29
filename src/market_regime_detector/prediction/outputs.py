@@ -29,6 +29,7 @@ def to_latest_json(result: PredictionResult) -> dict[str, object]:
 
     return {
         "model_id": result.model_id,
+        "model_name": result.model_name,
         "dataset_id": result.dataset_id,
         "asof": result.asof.isoformat(),
         "generated_at": result.generated_at.isoformat(),
@@ -61,6 +62,7 @@ def to_history_json(result: PredictionResult) -> dict[str, object]:
     ]
     return {
         "model_id": result.model_id,
+        "model_name": result.model_name,
         "dataset_id": result.dataset_id,
         "generated_at": result.generated_at.isoformat(),
         "history": records,
@@ -78,12 +80,14 @@ def _object_exists(s3: "S3Client", bucket: str, key: str) -> bool:
 
 
 def write_prediction_outputs(s3: "S3Client", bucket: str, result: PredictionResult) -> None:
-    """Brief section 4.1's `predictions/` layout. `latest.json`/`history.json` are
-    always overwritten; the dated snapshot is **write-once per asof date** — never
+    """Brief section 4.1's `predictions/` layout, now nested under `model_name=`
+    (multi-model support) so independently-scheduled predictions for different
+    model families never collide. `latest.json`/`history.json` are always
+    overwritten; the dated snapshot is **write-once per asof date** — never
     rewritten when data is later revised (brief section 3.3) — so a second call for
     the same `asof` leaves the existing snapshot untouched.
     """
-    prefix = f"predictions/model_id={result.model_id}"
+    prefix = f"predictions/model_name={result.model_name}/model_id={result.model_id}"
 
     s3.put_object(
         Bucket=bucket,

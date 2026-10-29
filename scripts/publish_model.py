@@ -3,11 +3,13 @@
 DynamoDB model registry.
 
 Usage:
-    uv run python scripts/publish_model.py --model-dir ./model --manifest-path ./model/manifest.json
-    uv run python scripts/publish_model.py --model-dir ./model --manifest-path ./model/manifest.json --stage development
+    uv run python scripts/publish_model.py --model-dir ./model --manifest-path ./model/manifest.json --model-name allweather-hmm2naive-us
+    uv run python scripts/publish_model.py --model-dir ./model --manifest-path ./model/manifest.json --model-name allweather-hmm2naive-us --stage development
 
-A thin wrapper around `market_regime_detector.training.publisher` — no logic of its
-own.
+`--model-name` is the stable family identity (multi-model support) — e.g.
+"allweather-hmm2naive-us" — distinct from the `model_id` this generates, which
+also encodes a date and content hash. A thin wrapper around
+`market_regime_detector.training.publisher` — no logic of its own.
 """
 
 import argparse
@@ -37,6 +39,12 @@ def _parse_args() -> argparse.Namespace:
         help="Path to the dataset manifest.json written alongside the model directory.",
     )
     parser.add_argument(
+        "--model-name",
+        required=True,
+        help="Stable model family identity, e.g. 'allweather-hmm2naive-us'. Lowercase "
+        "alphanumeric segments separated by hyphens.",
+    )
+    parser.add_argument(
         "--stage",
         choices=get_args(PublishStage),
         default="staging",
@@ -55,6 +63,7 @@ def main() -> None:
 
     model_id = publish_model(
         args.model_dir,
+        args.model_name,
         manifest,
         get_s3_client(),
         settings.s3_bucket_name,

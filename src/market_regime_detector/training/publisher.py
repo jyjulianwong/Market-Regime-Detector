@@ -1,5 +1,6 @@
 import hashlib
 import json
+import re
 from datetime import UTC, datetime
 from decimal import Decimal
 from pathlib import Path
@@ -16,12 +17,24 @@ if TYPE_CHECKING:
 
 PublishStage = Literal["development", "staging"]
 
+_MODEL_NAME_PATTERN = re.compile(r"^[a-z0-9]+(-[a-z0-9]+)+$")
 
-def _generate_model_id(dataset_id: str, feature_config_hash: str) -> str:
-    """`mrd-<YYYYMMDD>-<short_git_sha>` — brief's ASSUMPTION format — deterministic
-    so retries never mint a new ID. Falls back to a content hash of the dataset +
-    feature config when there's no git SHA (this repo has no commits yet); still
-    deterministic for the same inputs, not random.
+
+def _validate_model_name(model_name: str) -> None:
+    if not _MODEL_NAME_PATTERN.match(model_name):
+        raise ValueError(
+            f"model_name {model_name!r} must be lowercase alphanumeric segments "
+            "separated by hyphens, e.g. 'allweather-hmm2naive-us'"
+        )
+
+
+def _generate_model_id(model_name: str, dataset_id: str, feature_config_hash: str) -> str:
+    """`<model_name>-<YYYYMMDD>-<short_git_sha>` — deterministic so retries never
+    mint a new ID for the same model_name/dataset/feature-config. Falls back to a
+    content hash of the dataset + feature config when there's no git SHA; still
+    deterministic for the same inputs, not random. `model_name` is carried as its
+    own registry attribute too (see `_registry_item`) — never re-derived by parsing
+    this string back apart.
     """
     date_part = datetime.now(UTC).strftime("%Y%m%d")
     git_sha = get_git_sha()
@@ -30,11 +43,13 @@ def _generate_model_id(dataset_id: str, feature_config_hash: str) -> str:
     else:
         payload = f"{dataset_id}:{feature_config_hash}".encode()
         suffix = hashlib.sha256(payload).hexdigest()[:8]
-    return f"mrd-{date_part}-{suffix}"
+    return f"{model_name}-{date_part}-{suffix}"
 
 
-def _upload_model_files(s3: "S3Client", bucket: str, model_id: str, local_model_dir: Path) -> str:
-    prefix = f"models/{model_id}"
+def _upload_model_files(
+    s3: "S3Client", bucket: str, model_name: str, model_id: str, local_model_dir: Path
+) -> str:
+    prefix = f"models/{model_name}/{model_id}"
     for path in sorted(local_model_dir.iterdir()):
         if path.is_file():
             s3.upload_file(str(path), bucket, f"{prefix}/{path.name}")
@@ -51,6 +66,7 @@ def _upload_manifest(s3: "S3Client", bucket: str, manifest: dict[str, object]) -
 
 def _registry_item(
     model_id: str,
+    model_name: str,
     manifest: dict[str, object],
     metrics: dict[str, object],
     hyperparameters: dict[str, object],
@@ -64,6 +80,7 @@ def _registry_item(
     """
     return {
         "model_id": model_id,
+        "model_name": model_name,
         "dataset_id": manifest["dataset_id"],
         "last_modified": datetime.now(UTC).isoformat(),
         "stage": stage,
@@ -95,6 +112,7 @@ def _registry_item(
 
 def publish_model(
     local_model_dir: Path,
+    model_name: str,
     manifest: dict[str, object],
     s3: "S3Client",
     bucket: str,
@@ -105,16 +123,20 @@ def publish_model(
     """Uploads a local model directory to S3, uploads the dataset manifest to its
     own S3 prefix, and writes the DynamoDB registry item — brief section 3.2's
     publisher, "a single command that handles all three steps and is safe to
-    retry."
+    retry," now scoped under `model_name` (multi-model support) so independently
+    published model families never collide in S3 or the registry.
 
     Retry-safety comes from determinism, not a separate idempotency mechanism:
-    `model_id` is generated the same way every time for the same dataset + feature
-    config + day (`_generate_model_id`), so re-running uploads the same bytes to the
-    same S3 keys and writes a registry item with the same identity (`model_id`,
-    `dataset_id`, S3 URIs, `stage`) — `last_modified` naturally reflects each actual
-    publish attempt's completion time, which is correct behavior for a retry, not a
-    broken idempotency guarantee.
+    `model_id` is generated the same way every time for the same model_name +
+    dataset + feature config + day (`_generate_model_id`), so re-running uploads
+    the same bytes to the same S3 keys and writes a registry item with the same
+    identity (`model_id`, `model_name`, `dataset_id`, S3 URIs, `stage`) —
+    `last_modified` naturally reflects each actual publish attempt's completion
+    time, which is correct behavior for a retry, not a broken idempotency
+    guarantee.
     """
+    _validate_model_name(model_name)
+
     # DynamoDB has no native float type (boto3 requires Decimal to avoid
     # floating-point precision ambiguity), so metrics/hyperparameters headed into
     # the registry item are parsed as Decimal straight away.
@@ -125,13 +147,14 @@ def publish_model(
     dataset_id = manifest["dataset_id"]
     assert isinstance(feature_config_hash, str)
     assert isinstance(dataset_id, str)
-    model_id = _generate_model_id(dataset_id, feature_config_hash)
+    model_id = _generate_model_id(model_name, dataset_id, feature_config_hash)
 
-    model_s3_uri = _upload_model_files(s3, bucket, model_id, local_model_dir)
+    model_s3_uri = _upload_model_files(s3, bucket, model_name, model_id, local_model_dir)
     manifest_s3_uri = _upload_manifest(s3, bucket, manifest)
 
     item = _registry_item(
         model_id,
+        model_name,
         manifest,
         metrics,
         config["hyperparameters"],

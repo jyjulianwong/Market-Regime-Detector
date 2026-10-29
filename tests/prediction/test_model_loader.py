@@ -12,6 +12,7 @@ from market_regime_detector.common.feature_config import FEATURE_CONFIG_V1
 from market_regime_detector.prediction.model_loader import load_model_artifact
 
 BUCKET = "test-bucket"
+MODEL_NAME = "allweather-hmm2naive-us"
 MODEL_ID = "mrd-20260101-abcdef12"
 
 
@@ -40,7 +41,7 @@ def _publish_fake_model(client: S3Client, *, with_clip: bool = False) -> None:
     `scalers.npz` with no `growth_clip`/`inflation_clip` keys — so most tests
     exercise the old-artifact-compat path rather than the newer one by default.
     """
-    prefix = f"models/{MODEL_ID}"
+    prefix = f"models/{MODEL_NAME}/{MODEL_ID}"
     _put_npz(
         client,
         f"{prefix}/growth_hmm.npz",
@@ -93,7 +94,7 @@ def _publish_fake_model(client: S3Client, *, with_clip: bool = False) -> None:
 def test_load_model_artifact_reconstructs_hmm_arrays(s3_client: S3Client) -> None:
     _publish_fake_model(s3_client)
 
-    artifact = load_model_artifact(s3_client, BUCKET, MODEL_ID)
+    artifact = load_model_artifact(s3_client, BUCKET, MODEL_NAME, MODEL_ID)
 
     np.testing.assert_array_equal(artifact.growth.start_prob, [0.6, 0.4])
     np.testing.assert_array_equal(artifact.growth.means, [[-1.0, -1.0], [1.0, 1.0]])
@@ -104,7 +105,7 @@ def test_load_model_artifact_reconstructs_hmm_arrays(s3_client: S3Client) -> Non
 def test_load_model_artifact_reconstructs_scalers(s3_client: S3Client) -> None:
     _publish_fake_model(s3_client)
 
-    artifact = load_model_artifact(s3_client, BUCKET, MODEL_ID)
+    artifact = load_model_artifact(s3_client, BUCKET, MODEL_NAME, MODEL_ID)
 
     np.testing.assert_array_equal(artifact.growth_scaler_mean, [0.0, 0.0])
     np.testing.assert_array_equal(artifact.inflation_scaler_scale, [1.0])
@@ -115,7 +116,7 @@ def test_load_model_artifact_old_format_without_clip_defaults_to_no_clip(
 ) -> None:
     _publish_fake_model(s3_client, with_clip=False)
 
-    artifact = load_model_artifact(s3_client, BUCKET, MODEL_ID)
+    artifact = load_model_artifact(s3_client, BUCKET, MODEL_NAME, MODEL_ID)
 
     assert artifact.growth_scaler_clip == np.inf
     assert artifact.inflation_scaler_clip == np.inf
@@ -124,7 +125,7 @@ def test_load_model_artifact_old_format_without_clip_defaults_to_no_clip(
 def test_load_model_artifact_new_format_reads_clip_values(s3_client: S3Client) -> None:
     _publish_fake_model(s3_client, with_clip=True)
 
-    artifact = load_model_artifact(s3_client, BUCKET, MODEL_ID)
+    artifact = load_model_artifact(s3_client, BUCKET, MODEL_NAME, MODEL_ID)
 
     assert artifact.growth_scaler_clip == 4.0
     assert artifact.inflation_scaler_clip == 3.0
@@ -133,7 +134,7 @@ def test_load_model_artifact_new_format_reads_clip_values(s3_client: S3Client) -
 def test_load_model_artifact_reconstructs_feature_config(s3_client: S3Client) -> None:
     _publish_fake_model(s3_client)
 
-    artifact = load_model_artifact(s3_client, BUCKET, MODEL_ID)
+    artifact = load_model_artifact(s3_client, BUCKET, MODEL_NAME, MODEL_ID)
 
     assert artifact.feature_config == FEATURE_CONFIG_V1
 
@@ -141,7 +142,7 @@ def test_load_model_artifact_reconstructs_feature_config(s3_client: S3Client) ->
 def test_up_state_resolves_from_string_keyed_labels(s3_client: S3Client) -> None:
     _publish_fake_model(s3_client)
 
-    artifact = load_model_artifact(s3_client, BUCKET, MODEL_ID)
+    artifact = load_model_artifact(s3_client, BUCKET, MODEL_NAME, MODEL_ID)
 
     assert artifact.growth.up_state == 1
     assert artifact.inflation.up_state == 1
