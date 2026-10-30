@@ -1,0 +1,13 @@
+schema_version: "1.1"
+name: plain-html-news-client
+context:
+  scaffold_script: place-files.sh
+expected_outcome: |
+  The static HTML/CSS client is restyled to the Investment AI Suite "fintech noir" look: dark ink
+  background instead of light gray, the three house fonts (Playfair Display, Inter, JetBrains Mono)
+  loaded and applied to headings/body/labels respectively, gold and/or mint used as accent colors
+  instead of the original navy, and at least one signature effect (glass cards, cursor-spotlight,
+  gradient heading text, or scroll-reveal) applied somewhere. The page's existing navigation links,
+  headings, and content are preserved — this is a visual restyle, not a rewrite of the page's
+  structure or copy. No build tooling is introduced for what is a plain static site (CSS should be
+  plain CSS, not require a bundler that didn't exist before).

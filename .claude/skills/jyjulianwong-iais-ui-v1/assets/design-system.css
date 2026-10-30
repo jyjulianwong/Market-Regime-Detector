@@ -1,0 +1,239 @@
+/*
+ * Investment AI Suite UI v1 — portable design system CSS.
+ * Paste into the target repo's global stylesheet (a Tailwind `@layer components` block, a plain
+ * CSS file, or a component library's global CSS). Framework-agnostic: no Tailwind required.
+ * See references/design-tokens.md and references/css-recipes.md in this skill for the rationale
+ * behind each value.
+ */
+
+:root {
+  --ias-ink-950: #060913;
+  --ias-ink-900: #0a0f1f;
+  --ias-ink-800: #10172b;
+  --ias-gold: #e7c47e;
+  --ias-gold-soft: #f3ddae;
+  --ias-gold-deep: #a8803c;
+  --ias-mint: #5ce1c6;
+  --ias-mint-deep: #1f9e88;
+  --ias-text: #e2e8f0;
+  --ias-ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+html {
+  color-scheme: dark;
+  scroll-behavior: smooth;
+}
+
+body {
+  background-color: var(--ias-ink-950);
+  color: var(--ias-text);
+  font-family: Inter, system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+.ias-font-serif {
+  font-family: 'Playfair Display', Georgia, serif;
+  font-variant-numeric: lining-nums;
+}
+
+.ias-font-mono {
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+}
+
+::selection {
+  background-color: #e7c47e33;
+  color: var(--ias-gold-soft);
+}
+
+a:focus-visible,
+button:focus-visible {
+  outline: 2px solid var(--ias-gold);
+  outline-offset: 3px;
+  border-radius: 0.5rem;
+}
+
+/* ── Ambient background ─────────────────────────────── */
+
+.ias-aurora {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  overflow: hidden;
+  background: radial-gradient(ellipse 120% 80% at 50% -10%, var(--ias-ink-800) 0%, var(--ias-ink-950) 62%);
+}
+
+.ias-aurora::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.035) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.035) 1px, transparent 1px);
+  background-size: 64px 64px;
+  -webkit-mask-image: radial-gradient(ellipse 70% 55% at 50% 15%, #000 0%, transparent 75%);
+  mask-image: radial-gradient(ellipse 70% 55% at 50% 15%, #000 0%, transparent 75%);
+}
+
+.ias-orb {
+  position: absolute;
+  border-radius: 9999px;
+  filter: blur(100px);
+  opacity: 0.32;
+  will-change: transform;
+  animation: ias-drift 30s ease-in-out infinite alternate;
+}
+
+/* ── Glass card ─────────────────────────────────────── */
+
+.ias-glass {
+  position: relative;
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.075), rgba(255, 255, 255, 0.022));
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  backdrop-filter: blur(20px) saturate(150%);
+  -webkit-backdrop-filter: blur(20px) saturate(150%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.07),
+    0 24px 48px -28px rgba(0, 0, 0, 0.7);
+  border-radius: 1rem;
+}
+
+/* ── Cursor spotlight (pair with the pointermove snippet in css-recipes.md) ── */
+
+.ias-spotlight {
+  transition: transform 0.3s var(--ias-ease-out-expo), border-color 0.3s ease;
+}
+
+.ias-spotlight::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+  background: radial-gradient(360px circle at var(--mx, 50%) var(--my, 50%), rgba(231, 196, 126, 0.15), transparent 60%);
+}
+
+.ias-spotlight:hover,
+.ias-spotlight:focus-visible {
+  transform: translateY(-3px);
+  border-color: rgba(231, 196, 126, 0.38);
+}
+
+.ias-spotlight:hover::before,
+.ias-spotlight:focus-visible::before {
+  opacity: 1;
+}
+
+/* ── Gradient text ──────────────────────────────────── */
+
+.ias-text-gold-gradient {
+  background: linear-gradient(120deg, var(--ias-gold-soft) 0%, var(--ias-gold) 45%, #b98a3e 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.ias-text-ivory-gradient {
+  background: linear-gradient(180deg, #ffffff 30%, #a9b4c9 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+/* ── Pipeline connector ─────────────────────────────── */
+
+.ias-flow-line {
+  position: relative;
+  width: 2px;
+  background-image: repeating-linear-gradient(to bottom, var(--ias-gold) 0 5px, transparent 5px 11px);
+  background-size: 2px 11px;
+  animation: ias-flow 1.1s linear infinite;
+  opacity: 0.75;
+}
+
+.ias-flow-arrow {
+  position: absolute;
+  bottom: -2px;
+  left: 50%;
+  width: 0;
+  height: 0;
+  transform: translateX(-50%);
+  border-left: 4.5px solid transparent;
+  border-right: 4.5px solid transparent;
+  border-top: 6px solid var(--ias-gold);
+}
+
+/* ── Shimmer skeleton ────────────────────────────────── */
+
+.ias-shimmer {
+  background: linear-gradient(100deg, rgba(255, 255, 255, 0.04) 20%, rgba(255, 255, 255, 0.11) 40%, rgba(255, 255, 255, 0.04) 60%);
+  background-size: 200% 100%;
+  animation: ias-shimmer 1.6s linear infinite;
+}
+
+/* ── Scroll-reveal ──────────────────────────────────── */
+
+.ias-fly-in-hidden {
+  opacity: 0;
+  transform: translateY(28px) scale(0.98);
+}
+
+.ias-animate-fly-in {
+  animation: ias-fly-in 0.8s var(--ias-ease-out-expo) both;
+}
+
+/* ── Bar-chart growth ────────────────────────────────── */
+
+.ias-bar-grow {
+  transform-origin: left center;
+  transition: transform 1.1s var(--ias-ease-out-expo);
+}
+
+/* ── Keyframes ───────────────────────────────────────── */
+
+@keyframes ias-drift {
+  from { transform: translate3d(0, 0, 0) scale(1); }
+  to   { transform: translate3d(60px, 40px, 0) scale(1.15); }
+}
+
+@keyframes ias-flow {
+  to { background-position: 0 11px; }
+}
+
+@keyframes ias-shimmer {
+  to { background-position: -200% 0; }
+}
+
+@keyframes ias-fly-in {
+  from { opacity: 0; transform: translateY(28px) scale(0.98); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+/* ── Reduced motion — always keep this block in sync with every animated class above ── */
+
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+
+  .ias-orb,
+  .ias-flow-line,
+  .ias-shimmer,
+  .ias-animate-fly-in {
+    animation: none;
+  }
+
+  .ias-fly-in-hidden {
+    opacity: 1;
+    transform: none;
+  }
+
+  .ias-bar-grow {
+    transition: none;
+  }
+
+  .ias-spotlight,
+  .ias-spotlight:hover {
+    transform: none;
+  }
+}

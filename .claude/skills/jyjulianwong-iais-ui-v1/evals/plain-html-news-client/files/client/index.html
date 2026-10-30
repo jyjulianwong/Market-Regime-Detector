@@ -1,0 +1,325 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Investment News Analysis AI</title>
+  <link rel="icon" href="favicon.ico" sizes="32x32">
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="apple-touch-icon.png">
+  <link rel="manifest" href="site.webmanifest">
+  <meta name="theme-color" content="#1a3a5c">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Open+Sans:ital,wght@0,300..800;1,300..800&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    button, input, textarea, select { font-family: inherit; }
+
+    body {
+      font-family: "Open Sans", sans-serif;
+      background: #f5f7fa;
+      color: #222;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    header {
+      position: relative;
+      background: #1a3a5c;
+      color: #fff;
+      padding: 18px 32px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    header h1 { font-size: 1.2rem; font-weight: 600; letter-spacing: 0.01em; }
+    header nav a {
+      color: #a8c8e8;
+      text-decoration: none;
+      font-size: 0.9rem;
+      margin-left: 24px;
+    }
+    header nav a:hover { color: #fff; }
+    header nav a.active { color: #fff; font-weight: 600; }
+
+    .nav-toggle {
+      display: none;
+      flex-direction: column;
+      justify-content: space-between;
+      width: 24px;
+      height: 18px;
+      background: none;
+      border: none;
+      padding: 0;
+      cursor: pointer;
+    }
+    .nav-toggle span {
+      display: block;
+      height: 2px;
+      width: 100%;
+      background: #fff;
+      border-radius: 1px;
+      transition: transform 0.2s ease, opacity 0.2s ease;
+    }
+    .nav-toggle.open span:nth-child(1) { transform: translateY(8px) rotate(45deg); }
+    .nav-toggle.open span:nth-child(2) { opacity: 0; }
+    .nav-toggle.open span:nth-child(3) { transform: translateY(-8px) rotate(-45deg); }
+
+    @media (max-width: 600px) {
+      .nav-toggle { display: flex; }
+      header nav {
+        display: none;
+        position: absolute;
+        top: 100%;
+        left: 0;
+        right: 0;
+        flex-direction: column;
+        background: #1a3a5c;
+        padding: 8px 32px 16px;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+      }
+      header nav.open { display: flex; }
+      header nav a {
+        margin-left: 0;
+        padding: 10px 0;
+        border-top: 1px solid rgba(255,255,255,0.12);
+      }
+      header nav a:first-child { border-top: none; }
+    }
+
+    main {
+      flex: 1;
+      max-width: 720px;
+      width: 100%;
+      margin: 48px auto;
+      padding: 0 24px;
+    }
+
+    .card {
+      background: #fff;
+      border-radius: 10px;
+      box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+      padding: 32px;
+    }
+
+    .card h2 { font-size: 1.1rem; margin-bottom: 8px; color: #1a3a5c; }
+    .card p.subtitle { font-size: 0.88rem; color: #666; margin-bottom: 24px; }
+
+    textarea {
+      width: 100%;
+      height: 220px;
+      border: 1px solid #cdd5df;
+      border-radius: 6px;
+      padding: 12px;
+      font-size: 0.9rem;
+      resize: vertical;
+      line-height: 1.5;
+      transition: border-color 0.15s;
+    }
+    textarea:focus { outline: none; border-color: #2c5f8a; }
+
+    .char-count {
+      font-size: 0.78rem;
+      color: #999;
+      text-align: right;
+      margin-top: 6px;
+    }
+    .char-count.over { color: #c0392b; }
+
+    button#send {
+      margin-top: 20px;
+      background: #1a3a5c;
+      color: #fff;
+      border: none;
+      border-radius: 6px;
+      padding: 11px 28px;
+      font-size: 0.95rem;
+      font-weight: 700;
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+    button#send:hover:not(:disabled) { background: #2c5f8a; }
+    button#send:disabled { opacity: 0.55; cursor: not-allowed; }
+
+    #status {
+      margin-top: 18px;
+      font-size: 0.88rem;
+      min-height: 20px;
+    }
+    #status.success { color: #1a7a3a; }
+    #status.error   { color: #c0392b; }
+
+    .submissions {
+      margin-top: 32px;
+      border-top: 1px solid #eee;
+      padding-top: 24px;
+    }
+    .submissions h3 { font-size: 0.95rem; color: #444; margin-bottom: 12px; }
+    .submission-item {
+      background: #f8fafc;
+      border: 1px solid #e4e9f0;
+      border-radius: 6px;
+      padding: 10px 14px;
+      margin-bottom: 8px;
+      font-size: 0.85rem;
+      color: #333;
+    }
+    .submission-item .meta { font-size: 0.75rem; color: #999; margin-top: 4px; }
+  </style>
+</head>
+<body>
+
+<header>
+  <h3>Investment News Analysis AI</h3>
+  <button id="nav-toggle" class="nav-toggle" aria-label="Toggle navigation" aria-expanded="false" aria-controls="site-nav">
+    <span></span><span></span><span></span>
+  </button>
+  <nav id="site-nav">
+    <a href="index.html" class="active">Submit</a>
+    <a href="reports.html">Reports</a>
+  </nav>
+</header>
+
+<main>
+  <div class="card">
+    <h2>Submit a News Snippet</h2>
+    <p class="subtitle">
+      Paste a snippet from a news article below. Snippets submitted today will be
+      analysed at 10:00 UTC and included in today's report (weekdays only).
+    </p>
+
+    <textarea
+      id="snippet"
+      placeholder="Paste a news article snippet here…"
+      maxlength="10000"
+    ></textarea>
+    <div class="char-count"><span id="char-num">0</span> / 10,000</div>
+
+    <button id="send">Send</button>
+    <p class="subtitle" style="margin-top:10px; margin-bottom:0;">
+      Sending requires a device certificate authorized via
+      <a href="https://jyjulianwong.github.io/Obsidian-Server/" target="_blank" rel="noopener">Obsidian</a>
+      — this feature is restricted to the site owner's own devices.
+    </p>
+    <div id="status"></div>
+
+    <div class="submissions" id="submissions-section" style="display:none">
+      <h3>Submitted today</h3>
+      <div id="submissions-list"></div>
+    </div>
+  </div>
+</main>
+
+<script>
+  const API_BASE = "https://investment-news-analysis-ai.onrender.com";
+  // Obsidian (https://github.com/jyjulianwong/Obsidian-Server) issues short-lived
+  // access tokens only to devices with an installed client certificate — this is
+  // what restricts "Send" to the site owner's own devices. The browser shows a
+  // one-time-per-profile certificate picker on the first request; on a device
+  // without an authorized cert, the request simply fails (no cert to offer, or
+  // the picker is dismissed), which surfaces as a normal submission error below.
+  const OBSIDIAN_ISSUER = "https://auth.jyjwong.com";
+
+  async function getObsidianAccessToken() {
+    const resp = await fetch(`${OBSIDIAN_ISSUER}/auth/token`, { method: "POST" });
+    if (!resp.ok) {
+      throw new Error("Device not authorized to submit snippets");
+    }
+    const { access_token } = await resp.json();
+    return access_token;
+  }
+
+  const snippetEl = document.getElementById("snippet");
+  const charNumEl = document.getElementById("char-num");
+  const sendBtn   = document.getElementById("send");
+  const statusEl  = document.getElementById("status");
+  const subsSection = document.getElementById("submissions-section");
+  const subsList    = document.getElementById("submissions-list");
+  const navToggle = document.getElementById("nav-toggle");
+  const siteNav    = document.getElementById("site-nav");
+
+  navToggle.addEventListener("click", () => {
+    const isOpen = siteNav.classList.toggle("open");
+    navToggle.classList.toggle("open", isOpen);
+    navToggle.setAttribute("aria-expanded", String(isOpen));
+  });
+
+  const MAX = 10000;
+  const STORAGE_KEY = "ina_submissions_" + new Date().toISOString().slice(0,10);
+
+  function updateChar() {
+    const n = snippetEl.value.length;
+    charNumEl.textContent = n.toLocaleString();
+    charNumEl.parentElement.classList.toggle("over", n > MAX);
+    sendBtn.disabled = n === 0 || n > MAX;
+  }
+
+  function renderSubmissions() {
+    const items = JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]");
+    if (items.length === 0) { subsSection.style.display = "none"; return; }
+    subsSection.style.display = "";
+    subsList.innerHTML = items.map(item => `
+      <div class="submission-item">
+        <div>${item.preview}</div>
+        <div class="meta">Submitted at ${item.time} UTC</div>
+      </div>
+    `).join("");
+  }
+
+  function saveSubmission(text) {
+    const items = JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]");
+    items.unshift({
+      preview: text.slice(0, 120) + (text.length > 120 ? "…" : ""),
+      time: new Date().toUTCString().match(/\d{2}:\d{2}:\d{2}/)[0],
+    });
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(items));
+  }
+
+  snippetEl.addEventListener("input", updateChar);
+  updateChar();
+  renderSubmissions();
+
+  sendBtn.addEventListener("click", async () => {
+    const text = snippetEl.value.trim();
+    if (!text) return;
+
+    sendBtn.disabled = true;
+    statusEl.textContent = "Sending…";
+    statusEl.className = "";
+
+    try {
+      const accessToken = await getObsidianAccessToken();
+
+      const resp = await fetch(`${API_BASE}/snippets`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${accessToken}`,
+        },
+        body: JSON.stringify({ text }),
+      });
+
+      if (!resp.ok) {
+        const err = await resp.json().catch(() => ({}));
+        throw new Error(err.detail || `HTTP ${resp.status}`);
+      }
+
+      statusEl.textContent = "Snippet submitted successfully.";
+      statusEl.className = "success";
+      saveSubmission(text);
+      snippetEl.value = "";
+      updateChar();
+      renderSubmissions();
+    } catch (err) {
+      statusEl.textContent = `Error: ${err.message}`;
+      statusEl.className = "error";
+      sendBtn.disabled = false;
+    }
+  });
+</script>
+
+</body>
+</html>

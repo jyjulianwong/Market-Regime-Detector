@@ -1,0 +1,11 @@
+schema_version: "1.1"
+name: fresh-vite-tailwind-tool
+context:
+  scaffold_script: place-files.sh
+expected_outcome: |
+  tailwind.config.js is extended with the ink/gold/mint color tokens and the serif/sans/mono font
+  families matching the Investment AI Suite landing page. The Google Fonts link tags for Playfair
+  Display, Inter, and JetBrains Mono are added to index.html. The holdings cards and page background
+  are restyled using the house look (dark ink background, glass card treatment, gold/mint accents)
+  rather than the original plain white/gray boilerplate. The holdings data and "View source" link
+  remain functionally present.

@@ -1,0 +1,352 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Investment News Analysis AI</title>
+  <link rel="icon" href="favicon.ico" sizes="32x32">
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="apple-touch-icon.png">
+  <link rel="manifest" href="site.webmanifest">
+  <meta name="theme-color" content="#1a3a5c">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Open+Sans:ital,wght@0,300..800;1,300..800&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    button, input, textarea, select { font-family: inherit; }
+
+    body {
+      font-family: "Open Sans", sans-serif;
+      background: #f5f7fa;
+      color: #222;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    header {
+      position: relative;
+      background: #1a3a5c;
+      color: #fff;
+      padding: 18px 32px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    header h1 { font-size: 1.2rem; font-weight: 600; letter-spacing: 0.01em; }
+    header nav a {
+      color: #a8c8e8;
+      text-decoration: none;
+      font-size: 0.9rem;
+      margin-left: 24px;
+    }
+    header nav a:hover { color: #fff; }
+    header nav a.active { color: #fff; font-weight: 600; }
+
+    .nav-toggle {
+      display: none;
+      flex-direction: column;
+      justify-content: space-between;
+      width: 24px;
+      height: 18px;
+      background: none;
+      border: none;
+      padding: 0;
+      cursor: pointer;
+    }
+    .nav-toggle span {
+      display: block;
+      height: 2px;
+      width: 100%;
+      background: #fff;
+      border-radius: 1px;
+      transition: transform 0.2s ease, opacity 0.2s ease;
+    }
+    .nav-toggle.open span:nth-child(1) { transform: translateY(8px) rotate(45deg); }
+    .nav-toggle.open span:nth-child(2) { opacity: 0; }
+    .nav-toggle.open span:nth-child(3) { transform: translateY(-8px) rotate(-45deg); }
+
+    @media (max-width: 600px) {
+      .nav-toggle { display: flex; }
+      header nav {
+        display: none;
+        position: absolute;
+        top: 100%;
+        left: 0;
+        right: 0;
+        flex-direction: column;
+        background: #1a3a5c;
+        padding: 8px 32px 16px;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+      }
+      header nav.open { display: flex; }
+      header nav a {
+        margin-left: 0;
+        padding: 10px 0;
+        border-top: 1px solid rgba(255,255,255,0.12);
+      }
+      header nav a:first-child { border-top: none; }
+    }
+
+    main {
+      flex: 1;
+      max-width: 720px;
+      width: 100%;
+      margin: 48px auto;
+      padding: 0 24px;
+    }
+
+    .card {
+      background: #fff;
+      border-radius: 10px;
+      box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+      padding: 32px;
+    }
+
+    .card h2 { font-size: 1.1rem; margin-bottom: 8px; color: #1a3a5c; }
+    .card p.subtitle { font-size: 0.88rem; color: #666; margin-bottom: 28px; }
+
+    #reports-list { list-style: none; }
+
+    .report-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 14px 0;
+      border-bottom: 1px solid #eef1f5;
+    }
+    .report-row:last-child { border-bottom: none; }
+
+    .report-date {
+      font-weight: 600;
+      font-size: 0.95rem;
+      color: #1a3a5c;
+    }
+
+    .report-links { display: flex; gap: 12px; }
+    .report-links a {
+      font-size: 0.83rem;
+      padding: 5px 14px;
+      border-radius: 4px;
+      text-decoration: none;
+      font-weight: 500;
+      transition: opacity 0.15s;
+    }
+    .report-links a:hover { opacity: 0.8; }
+    .btn-pdf {
+      background: #1a3a5c;
+      color: #fff;
+    }
+    .btn-md {
+      background: #e8f0f8;
+      color: #1a3a5c;
+    }
+
+    #loading { color: #888; font-size: 0.9rem; }
+    #error   { color: #c0392b; font-size: 0.88rem; }
+    #empty   { color: #888; font-size: 0.88rem; }
+
+    .pagination {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-top: 24px;
+      padding-top: 20px;
+      border-top: 1px solid #eef1f5;
+    }
+    .pagination button {
+      min-width: 32px;
+      height: 32px;
+      padding: 0 8px;
+      border: 1px solid #dde3ea;
+      background: #fff;
+      color: #1a3a5c;
+      border-radius: 4px;
+      font-size: 0.85rem;
+      cursor: pointer;
+      transition: background 0.15s, color 0.15s;
+    }
+    .pagination button:hover:not(:disabled) { background: #e8f0f8; }
+    .pagination button:disabled {
+      color: #bbb;
+      cursor: not-allowed;
+    }
+    .pagination-jump {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      margin: 0 4px;
+      font-size: 0.83rem;
+      color: #666;
+      white-space: nowrap;
+    }
+    .pagination-jump select {
+      padding: 4px 6px;
+      border: 1px solid #dde3ea;
+      border-radius: 4px;
+      font-size: 0.83rem;
+      color: #222;
+      background: #fff;
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <h3>Investment News Analysis AI</h3>
+  <button id="nav-toggle" class="nav-toggle" aria-label="Toggle navigation" aria-expanded="false" aria-controls="site-nav">
+    <span></span><span></span><span></span>
+  </button>
+  <nav id="site-nav">
+    <a href="index.html">Submit</a>
+    <a href="reports.html" class="active">Reports</a>
+  </nav>
+</header>
+
+<main>
+  <div class="card">
+    <h2>Daily Reports</h2>
+    <p class="subtitle">
+      Reports are generated automatically at 10:00 UTC, Monday to Friday.
+      Click a date to download the PDF or view the Markdown source.
+    </p>
+
+    <div id="loading">Loading reports…</div>
+    <div id="error"  style="display:none"></div>
+    <div id="empty"  style="display:none">No reports found yet.</div>
+    <ul id="reports-list" style="display:none"></ul>
+    <nav id="pagination" class="pagination" style="display:none" aria-label="Reports pagination"></nav>
+  </div>
+</main>
+
+<script>
+  // Replace with your actual public S3 reports bucket URL after deployment.
+  // Format: https://<bucket-name>.s3.<region>.amazonaws.com
+  const S3_BASE = "https://004246189700-jyjulianwong-ina-news-reports.s3.eu-west-2.amazonaws.com";
+
+  const loadingEl    = document.getElementById("loading");
+  const errorEl      = document.getElementById("error");
+  const emptyEl      = document.getElementById("empty");
+  const listEl       = document.getElementById("reports-list");
+  const paginationEl = document.getElementById("pagination");
+  const navToggle    = document.getElementById("nav-toggle");
+  const siteNav      = document.getElementById("site-nav");
+
+  const PAGE_SIZE = 10;
+  let allDays = [];
+  let currentPage = 1;
+
+  navToggle.addEventListener("click", () => {
+    const isOpen = siteNav.classList.toggle("open");
+    navToggle.classList.toggle("open", isOpen);
+    navToggle.setAttribute("aria-expanded", String(isOpen));
+  });
+
+  async function loadReports() {
+    try {
+      // List all objects under reports/ using the S3 REST list API
+      const url = `${S3_BASE}?list-type=2&prefix=reports/&delimiter=/`;
+      const resp = await fetch(url);
+      if (!resp.ok) throw new Error(`S3 list failed: HTTP ${resp.status}`);
+
+      const text = await resp.text();
+      const parser = new DOMParser();
+      const xml = parser.parseFromString(text, "application/xml");
+
+      // Each day's folder appears as a <CommonPrefixes><Prefix> element
+      const prefixes = Array.from(xml.querySelectorAll("CommonPrefixes > Prefix"))
+        .map(el => el.textContent.trim())   // e.g. "reports/2025-11-01/"
+        .map(p => p.replace(/^reports\/|\/$/g, ""))  // => "2025-11-01"
+        .filter(Boolean)
+        .sort()
+        .reverse(); // newest first
+
+      loadingEl.style.display = "none";
+
+      if (prefixes.length === 0) {
+        emptyEl.style.display = "";
+        return;
+      }
+
+      allDays = prefixes;
+      listEl.style.display = "";
+      renderPage(1);
+
+    } catch (err) {
+      loadingEl.style.display = "none";
+      errorEl.style.display = "";
+      errorEl.textContent = `Failed to load reports: ${err.message}`;
+    }
+  }
+
+  function renderPage(page) {
+    const totalPages = Math.max(1, Math.ceil(allDays.length / PAGE_SIZE));
+    currentPage = Math.min(Math.max(1, page), totalPages);
+
+    const start = (currentPage - 1) * PAGE_SIZE;
+    const pageDays = allDays.slice(start, start + PAGE_SIZE);
+
+    listEl.innerHTML = pageDays.map(day => `
+      <li class="report-row">
+        <span class="report-date">${day}</span>
+        <div class="report-links">
+          <a class="btn-pdf" href="${S3_BASE}/reports/${day}/report.pdf" target="_blank" rel="noopener">PDF</a>
+          <a class="btn-md"  href="${S3_BASE}/reports/${day}/report.md"  target="_blank" rel="noopener">Markdown</a>
+        </div>
+      </li>
+    `).join("");
+
+    renderPagination(totalPages);
+  }
+
+  function renderPagination(totalPages) {
+    if (totalPages <= 1) {
+      paginationEl.style.display = "none";
+      paginationEl.innerHTML = "";
+      return;
+    }
+
+    const atFirst = currentPage === 1;
+    const atLast  = currentPage === totalPages;
+
+    let options = "";
+    for (let p = 1; p <= totalPages; p++) {
+      options += `<option value="${p}" ${p === currentPage ? "selected" : ""}>${p}</option>`;
+    }
+
+    let html = "";
+    html += `<button type="button" data-page="1" ${atFirst ? "disabled" : ""} aria-label="First page">&laquo;</button>`;
+    html += `<button type="button" data-page="${currentPage - 1}" ${atFirst ? "disabled" : ""} aria-label="Previous page">&lsaquo;</button>`;
+
+    html += `
+      <span class="pagination-jump">
+        <label for="jump-select">Go to</label>
+        <select id="jump-select" aria-label="Go to page">${options}</select>
+        of ${totalPages}
+      </span>
+    `;
+
+    html += `<button type="button" data-page="${currentPage + 1}" ${atLast ? "disabled" : ""} aria-label="Next page">&rsaquo;</button>`;
+    html += `<button type="button" data-page="${totalPages}" ${atLast ? "disabled" : ""} aria-label="Last page">&raquo;</button>`;
+
+    paginationEl.style.display = "";
+    paginationEl.innerHTML = html;
+
+    paginationEl.querySelectorAll("button[data-page]").forEach(btn => {
+      btn.addEventListener("click", () => renderPage(Number(btn.dataset.page)));
+    });
+
+    document.getElementById("jump-select").addEventListener("change", e => {
+      renderPage(Number(e.target.value));
+    });
+  }
+
+  loadReports();
+</script>
+
+</body>
+</html>

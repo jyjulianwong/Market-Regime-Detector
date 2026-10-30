@@ -1,0 +1,12 @@
+schema_version: "1.1"
+name: react-chakra-s3-browser
+context:
+  scaffold_script: place-files.sh
+expected_outcome: |
+  The Chakra UI file-browser app is restyled to the Investment AI Suite look by pushing the palette
+  (ink background, gold primary accent, mint secondary accent) and fonts (Playfair Display, Inter,
+  JetBrains Mono) into Chakra's theme layer (e.g. extendTheme/createSystem tokens) rather than only
+  scattering inline hex overrides, and at least one signature effect (glass panel, cursor-spotlight,
+  gradient heading text, or scroll-reveal) is applied to a real part of the UI (e.g. the file listing
+  rows or the page shell). The Explorer component's actual file-browsing functionality (listing,
+  navigation, routing) is left intact — this is a visual restyle only.
