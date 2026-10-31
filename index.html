@@ -1,0 +1,737 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Market Regime Detector</title>
+  <link rel="icon" href="favicon.ico" sizes="32x32">
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="apple-touch-icon.png">
+  <link rel="manifest" href="site.webmanifest">
+  <meta name="theme-color" content="#060913">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&family=Playfair+Display:ital,wght@0,400;0,500;0,600;0,700;1,400;1,500;1,600&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: "Inter", sans-serif;
+      background: #060913;
+      color: #e2e8f0;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .aurora {
+      position: fixed;
+      inset: 0;
+      z-index: -1;
+      overflow: hidden;
+      background: radial-gradient(ellipse 120% 80% at 50% -10%, #111c38 0%, #060913 62%);
+    }
+    .aurora::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background-image:
+        linear-gradient(rgba(255, 255, 255, 0.035) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255, 255, 255, 0.035) 1px, transparent 1px);
+      background-size: 64px 64px;
+      -webkit-mask-image: radial-gradient(ellipse 70% 55% at 50% 15%, #000 0%, transparent 75%);
+      mask-image: radial-gradient(ellipse 70% 55% at 50% 15%, #000 0%, transparent 75%);
+    }
+    .orb {
+      position: absolute;
+      border-radius: 9999px;
+      filter: blur(100px);
+      opacity: 0.32;
+      will-change: transform;
+      animation: drift 30s ease-in-out infinite alternate;
+    }
+    .orb-gold { width: 32rem; height: 32rem; top: -8rem; left: -6rem; background: #e7c47e; }
+    .orb-mint { width: 28rem; height: 28rem; top: 10rem; right: -8rem; background: #1f9e88; animation-delay: -8s; }
+    .orb-blue { width: 30rem; height: 30rem; bottom: -12rem; left: 20%; background: #2b6cb0; animation-delay: -16s; }
+
+    @keyframes drift {
+      from { transform: translate3d(0, 0, 0) scale(1); }
+      to   { transform: translate3d(60px, 40px, 0) scale(1.15); }
+    }
+
+    .font-serif { font-family: "Playfair Display", serif; font-variant-numeric: lining-nums; }
+    .font-mono { font-family: "JetBrains Mono", ui-monospace, monospace; }
+
+    header {
+      background: rgba(255, 255, 255, 0.03);
+      border-bottom: 1px solid rgba(255, 255, 255, 0.09);
+      backdrop-filter: blur(20px) saturate(150%);
+      color: #fff;
+      padding: 18px 32px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    header h1 {
+      font-family: "Playfair Display", serif;
+      font-variant-numeric: lining-nums;
+      font-size: 1.3rem;
+      font-weight: 600;
+      letter-spacing: 0.01em;
+      background: linear-gradient(180deg, #ffffff 30%, #a9b4c9 100%);
+      -webkit-background-clip: text;
+      background-clip: text;
+      color: transparent;
+    }
+    header h1 .accent {
+      background: linear-gradient(120deg, #f3ddae 0%, #e7c47e 45%, #b98a3e 100%);
+      -webkit-background-clip: text;
+      background-clip: text;
+      color: transparent;
+    }
+    header .asof {
+      font-family: "JetBrains Mono", ui-monospace, monospace;
+      font-size: 0.78rem;
+      color: #94a3b8;
+      white-space: nowrap;
+    }
+
+    .model-picker {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-left: auto;
+    }
+    .model-picker-label {
+      font-family: "JetBrains Mono", ui-monospace, monospace;
+      font-size: 0.68rem;
+      font-weight: 500;
+      color: #64748b;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      white-space: nowrap;
+    }
+    #model-select {
+      font-family: "JetBrains Mono", ui-monospace, monospace;
+      font-size: 0.78rem;
+      color: #e2e8f0;
+      background: rgba(255,255,255,0.05);
+      border: 1px solid rgba(255,255,255,0.14);
+      border-radius: 9999px;
+      padding: 6px 12px;
+      cursor: pointer;
+      transition: border-color 0.2s ease, color 0.2s ease;
+    }
+    #model-select:hover,
+    #model-select:focus-visible {
+      border-color: rgba(231, 196, 126, 0.38);
+      color: #f3ddae;
+    }
+    #model-select option {
+      color: #0a0f1f;
+    }
+    #model-select:disabled {
+      opacity: 0.6;
+      cursor: default;
+    }
+
+    main {
+      flex: 1;
+      max-width: 720px;
+      width: 100%;
+      margin: 56px auto;
+      padding: 0 24px;
+    }
+
+    .card {
+      position: relative;
+      background: linear-gradient(145deg, rgba(255, 255, 255, 0.075), rgba(255, 255, 255, 0.022));
+      border: 1px solid rgba(255, 255, 255, 0.09);
+      backdrop-filter: blur(20px) saturate(150%);
+      box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.07),
+        0 24px 48px -28px rgba(0, 0, 0, 0.7);
+      border-radius: 1rem;
+      padding: 32px;
+      transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1), border-color 0.3s ease;
+    }
+    .card::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      border-radius: inherit;
+      pointer-events: none;
+      opacity: 0;
+      transition: opacity 0.3s ease;
+      background: radial-gradient(360px circle at var(--mx, 50%) var(--my, 50%), rgba(231, 196, 126, 0.15), transparent 60%);
+    }
+    .card:hover::before,
+    .card:focus-within::before { opacity: 1; }
+    .card + .card { margin-top: 24px; }
+
+    .eyebrow {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin-bottom: 14px;
+    }
+    .eyebrow-index {
+      font-family: "JetBrains Mono", ui-monospace, monospace;
+      font-size: 0.72rem;
+      letter-spacing: 0.25em;
+      color: #e7c47e;
+    }
+    .eyebrow-rule {
+      flex: 1 1 60px;
+      min-width: 24px;
+      height: 1px;
+      background: linear-gradient(90deg, rgba(231, 196, 126, 0.65), transparent);
+    }
+
+    .card h2 {
+      font-family: "Playfair Display", serif;
+      font-variant-numeric: lining-nums;
+      font-size: 1.35rem;
+      font-weight: 600;
+      margin-bottom: 8px;
+      color: #f8fafc;
+    }
+    .card p.subtitle { font-size: 0.88rem; color: #94a3b8; margin-bottom: 24px; line-height: 1.6; }
+
+    #loading { color: #94a3b8; font-size: 0.9rem; }
+    #error {
+      display: none;
+      color: #fca5a5;
+      font-size: 0.88rem;
+      background: rgba(248, 113, 113, 0.08);
+      border: 1px solid rgba(248, 113, 113, 0.32);
+      border-radius: 10px;
+      padding: 12px 14px;
+    }
+
+    #content { display: none; }
+
+    .stale-banner {
+      display: none;
+      background: rgba(231, 196, 126, 0.1);
+      border: 1px solid rgba(231, 196, 126, 0.35);
+      color: #f3ddae;
+      border-radius: 10px;
+      padding: 10px 14px;
+      font-size: 0.85rem;
+      margin-bottom: 20px;
+    }
+
+    .regime-headline { text-align: center; margin-bottom: 28px; }
+    .regime-headline .label {
+      font-family: "Playfair Display", serif;
+      font-variant-numeric: lining-nums;
+      font-size: 1.8rem;
+      font-weight: 700;
+      background: linear-gradient(180deg, #ffffff 30%, #a9b4c9 100%);
+      -webkit-background-clip: text;
+      background-clip: text;
+      color: transparent;
+    }
+    .regime-headline .raw {
+      font-size: 0.78rem;
+      color: #64748b;
+      font-family: "JetBrains Mono", ui-monospace, monospace;
+      margin-top: 4px;
+    }
+    .regime-headline .confidence {
+      margin-top: 10px;
+      font-size: 0.95rem;
+      color: #cbd5e1;
+    }
+    .regime-headline .confidence b { font-family: "JetBrains Mono", ui-monospace, monospace; color: #e7c47e; }
+
+    .quadrant-grid {
+      display: grid;
+      grid-template-columns: auto 1fr 1fr;
+      grid-template-rows: auto 1fr 1fr;
+      gap: 6px;
+      margin-bottom: 28px;
+    }
+    .q-axis-label {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-family: "JetBrains Mono", ui-monospace, monospace;
+      font-size: 0.68rem;
+      font-weight: 500;
+      color: #64748b;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
+    .q-axis-label.inflation-up,
+    .q-axis-label.inflation-down {
+      writing-mode: vertical-rl;
+      transform: rotate(180deg);
+    }
+    .q-cell {
+      border-radius: 10px;
+      padding: 16px 10px;
+      text-align: center;
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      transition: background 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+    }
+    .q-cell .q-name {
+      font-size: 0.76rem;
+      font-weight: 500;
+      color: #94a3b8;
+      margin-bottom: 6px;
+    }
+    .q-cell .q-pct {
+      font-family: "JetBrains Mono", ui-monospace, monospace;
+      font-size: 1.25rem;
+      font-weight: 600;
+      color: #e2e8f0;
+    }
+    .q-cell.active {
+      background: rgba(231, 196, 126, 0.12);
+      border-color: rgba(231, 196, 126, 0.5);
+      box-shadow: 0 0 24px -6px rgba(231, 196, 126, 0.55);
+    }
+    .q-cell.active .q-name { color: #f3ddae; }
+    .q-cell.active .q-pct { color: #f3ddae; }
+
+    .axis-bars { margin-bottom: 8px; }
+    .axis-bar { margin-bottom: 18px; }
+    .axis-bar:last-child { margin-bottom: 0; }
+    .axis-bar .axis-row {
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.85rem;
+      color: #cbd5e1;
+      margin-bottom: 6px;
+    }
+    .axis-bar .axis-row b { font-family: "JetBrains Mono", ui-monospace, monospace; color: #e2e8f0; }
+    .axis-bar .track {
+      height: 8px;
+      background: rgba(255, 255, 255, 0.06);
+      border-radius: 4px;
+      overflow: hidden;
+    }
+    .axis-bar .fill {
+      height: 100%;
+      border-radius: 4px;
+      transition: width 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+    #p-growth-up-fill {
+      background: linear-gradient(90deg, #a8803c, #e7c47e);
+      box-shadow: 0 0 12px -2px rgba(231, 196, 126, 0.6);
+    }
+    #p-inflation-up-fill {
+      background: linear-gradient(90deg, #1f9e88, #5ce1c6);
+      box-shadow: 0 0 12px -2px rgba(92, 225, 198, 0.6);
+    }
+
+    .meta-table {
+      font-size: 0.85rem;
+      color: #94a3b8;
+      border-top: 1px solid rgba(255, 255, 255, 0.08);
+      padding-top: 16px;
+      margin-top: 24px;
+    }
+    .meta-table .row {
+      display: flex;
+      justify-content: space-between;
+      padding: 4px 0;
+    }
+    .meta-table .row span:first-child { color: #64748b; }
+    .meta-table .row span:last-child {
+      font-family: "JetBrains Mono", ui-monospace, monospace;
+      font-size: 0.8rem;
+      text-align: right;
+      color: #cbd5e1;
+    }
+
+    .warnings {
+      margin-top: 16px;
+      font-size: 0.82rem;
+      color: #f3ddae;
+    }
+    .warnings li { margin-left: 18px; margin-top: 2px; }
+
+    .disclaimer {
+      margin-top: 24px;
+      font-size: 0.78rem;
+      color: #64748b;
+      text-align: center;
+    }
+
+    footer {
+      position: relative;
+      text-align: center;
+      font-family: "Playfair Display", serif;
+      font-variant-numeric: lining-nums;
+      font-size: 0.78rem;
+      color: #64748b;
+      padding: 32px 24px 24px;
+    }
+    footer::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 50%;
+      transform: translateX(-50%);
+      width: min(480px, 80%);
+      height: 1px;
+      background: linear-gradient(90deg, transparent, rgba(255,255,255,0.15), transparent);
+    }
+    footer a { color: #94a3b8; text-decoration: none; transition: color 0.2s ease; }
+    footer a:hover { color: #f3ddae; }
+
+    a:focus-visible,
+    button:focus-visible,
+    select:focus-visible {
+      outline: 2px solid #e7c47e;
+      outline-offset: 3px;
+      border-radius: 0.5rem;
+    }
+
+    ::selection {
+      background-color: rgba(231, 196, 126, 0.2);
+      color: #f3ddae;
+    }
+
+    .fly-in-hidden {
+      opacity: 0;
+      transform: translateY(28px) scale(0.98);
+    }
+    .animate-fly-in {
+      animation: fly-in 0.8s cubic-bezier(0.16, 1, 0.3, 1) both;
+    }
+    @keyframes fly-in {
+      from { opacity: 0; transform: translateY(28px) scale(0.98); }
+      to   { opacity: 1; transform: translateY(0) scale(1); }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      html { scroll-behavior: auto; }
+      .orb, .animate-fly-in { animation: none; }
+      .fly-in-hidden { opacity: 1; transform: none; }
+      .card { transition: none; }
+    }
+  </style>
+</head>
+<body>
+
+<div class="aurora" aria-hidden="true">
+  <div class="orb orb-gold"></div>
+  <div class="orb orb-mint"></div>
+  <div class="orb orb-blue"></div>
+</div>
+
+<header>
+  <h1>Market <span class="accent">Regime</span> Detector</h1>
+  <span class="asof" id="header-asof"></span>
+</header>
+
+<main>
+  <div class="card fly-in-hidden" data-reveal>
+    <div class="eyebrow">
+      <span class="eyebrow-index font-mono">01</span>
+      <span class="eyebrow-rule"></span>
+      <div class="model-picker">
+        <label for="model-select" class="model-picker-label">Model</label>
+        <select id="model-select" disabled></select>
+      </div>
+    </div>
+    <h2>Current Macro Regime</h2>
+    <p class="subtitle">
+      A causal, point-in-time nowcast of the Bridgewater All Weather growth/inflation
+      quadrant, from two independent 2-state Gaussian HMMs run against FRED, ALFRED,
+      and market data.
+    </p>
+
+    <div id="loading">Loading latest regime…</div>
+    <div id="error"></div>
+
+    <div id="content">
+      <div class="stale-banner" id="stale-banner"></div>
+
+      <div class="regime-headline">
+        <div class="label" id="regime-label">—</div>
+        <div class="raw" id="regime-raw">—</div>
+        <div class="confidence">Confidence: <b id="regime-confidence">—</b></div>
+      </div>
+
+      <div class="quadrant-grid">
+        <div></div>
+        <div class="q-axis-label">Growth ↑</div>
+        <div class="q-axis-label">Growth ↓</div>
+
+        <div class="q-axis-label inflation-up">Inflation ↑</div>
+        <div class="q-cell" id="q-GROWTH_UP_INFLATION_UP">
+          <div class="q-name">Reflation</div>
+          <div class="q-pct">—</div>
+        </div>
+        <div class="q-cell" id="q-GROWTH_DOWN_INFLATION_UP">
+          <div class="q-name">Stagflation</div>
+          <div class="q-pct">—</div>
+        </div>
+
+        <div class="q-axis-label inflation-down">Inflation ↓</div>
+        <div class="q-cell" id="q-GROWTH_UP_INFLATION_DOWN">
+          <div class="q-name">Disinflationary growth</div>
+          <div class="q-pct">—</div>
+        </div>
+        <div class="q-cell" id="q-GROWTH_DOWN_INFLATION_DOWN">
+          <div class="q-name">Deflation</div>
+          <div class="q-pct">—</div>
+        </div>
+      </div>
+
+      <div class="axis-bars">
+        <div class="axis-bar">
+          <div class="axis-row">
+            <span>P(Growth up)</span>
+            <b id="p-growth-up">—</b>
+          </div>
+          <div class="track"><div class="fill" id="p-growth-up-fill" style="width:0%"></div></div>
+        </div>
+        <div class="axis-bar">
+          <div class="axis-row">
+            <span>P(Inflation up)</span>
+            <b id="p-inflation-up">—</b>
+          </div>
+          <div class="track"><div class="fill" id="p-inflation-up-fill" style="width:0%"></div></div>
+        </div>
+      </div>
+
+      <ul class="warnings" id="warnings-list" style="display:none"></ul>
+
+      <div class="meta-table">
+        <div class="row"><span>As of</span><span id="meta-asof">—</span></div>
+        <div class="row"><span>Observation date</span><span id="meta-observation">—</span></div>
+        <div class="row"><span>Generated</span><span id="meta-generated">—</span></div>
+        <div class="row"><span>Model</span><span id="meta-model">—</span></div>
+      </div>
+
+      <p class="disclaimer" id="disclaimer-text"></p>
+    </div>
+  </div>
+</main>
+
+<footer>
+  <a href="https://github.com/jyjulianwong/Market-Regime-Detector" target="_blank" rel="noopener">
+    jyjulianwong/Market-Regime-Detector
+  </a>
+</footer>
+
+<script>
+  // Set by Terraform's server_api_gateway_url output — see terraform/main.tf
+  // (aws_apigatewayv2_api.server). NOT the Lambda Function URL
+  // (server_function_url) — that's blocked by this AWS account's org-level
+  // SCP denying anonymous lambda:InvokeFunctionUrl, which is why this project
+  // fronts the same server Lambda with API Gateway instead. Update manually
+  // after `terraform apply` if this value ever changes.
+  const API_BASE = "https://6nbosjpuc9.execute-api.eu-west-2.amazonaws.com";
+
+  const QUADRANT_LABELS = {
+    GROWTH_UP_INFLATION_UP: "Reflation",
+    GROWTH_DOWN_INFLATION_UP: "Stagflation",
+    GROWTH_UP_INFLATION_DOWN: "Disinflationary growth",
+    GROWTH_DOWN_INFLATION_DOWN: "Deflation",
+  };
+
+  const loadingEl = document.getElementById("loading");
+  const errorEl = document.getElementById("error");
+  const contentEl = document.getElementById("content");
+  const headerAsofEl = document.getElementById("header-asof");
+  const modelSelectEl = document.getElementById("model-select");
+
+  const SELECTED_MODEL_STORAGE_KEY = "mrd_selected_model";
+
+  function pct(x) {
+    return (x * 100).toFixed(1) + "%";
+  }
+
+  function formatTimestamp(iso) {
+    const d = new Date(iso);
+    return d.toLocaleString(undefined, {
+      dateStyle: "medium",
+      timeStyle: "short",
+    });
+  }
+
+  function render(data) {
+    headerAsofEl.textContent = `As of ${data.asof}`;
+
+    const staleBanner = document.getElementById("stale-banner");
+    if (data.is_stale) {
+      staleBanner.style.display = "block";
+      staleBanner.textContent =
+        "This result is flagged stale — one or more inputs may be out of date, " +
+        "or the batch job hasn't run recently. Treat with extra caution.";
+    }
+
+    if (!data.latest) {
+      errorEl.style.display = "block";
+      errorEl.textContent = "No regime estimate is available for this model yet.";
+      loadingEl.style.display = "none";
+      return;
+    }
+
+    const latest = data.latest;
+    const regimeLabel = QUADRANT_LABELS[latest.regime] || latest.regime;
+
+    document.getElementById("regime-label").textContent = regimeLabel;
+    document.getElementById("regime-raw").textContent = latest.regime;
+    document.getElementById("regime-confidence").textContent = pct(latest.confidence);
+
+    document.getElementById("p-growth-up").textContent = pct(latest.p_growth_up);
+    document.getElementById("p-growth-up-fill").style.width = pct(latest.p_growth_up);
+    document.getElementById("p-inflation-up").textContent = pct(latest.p_inflation_up);
+    document.getElementById("p-inflation-up-fill").style.width = pct(latest.p_inflation_up);
+
+    for (const [name, label] of Object.entries(QUADRANT_LABELS)) {
+      const cell = document.getElementById(`q-${name}`);
+      cell.querySelector(".q-pct").textContent = pct(latest.quadrants[name]);
+      cell.classList.toggle("active", name === latest.regime);
+    }
+
+    const warningsList = document.getElementById("warnings-list");
+    if (data.warnings && data.warnings.length > 0) {
+      warningsList.style.display = "block";
+      warningsList.innerHTML = data.warnings.map(w => `<li>${w}</li>`).join("");
+    }
+
+    document.getElementById("meta-asof").textContent = data.asof;
+    document.getElementById("meta-observation").textContent = data.observation_date || "—";
+    document.getElementById("meta-generated").textContent = formatTimestamp(data.generated_at);
+    document.getElementById("meta-model").textContent = data.model_id;
+
+    document.getElementById("disclaimer-text").textContent = data.disclaimer;
+
+    loadingEl.style.display = "none";
+    contentEl.style.display = "block";
+  }
+
+  function showLoading() {
+    loadingEl.style.display = "block";
+    loadingEl.textContent = "Loading latest regime…";
+    errorEl.style.display = "none";
+    contentEl.style.display = "none";
+    document.getElementById("stale-banner").style.display = "none";
+    document.getElementById("warnings-list").style.display = "none";
+  }
+
+  function showError(message) {
+    loadingEl.style.display = "none";
+    errorEl.style.display = "block";
+    errorEl.textContent = message;
+  }
+
+  // Keeps the current model selection shareable/bookmarkable via ?model=, and
+  // sticky across visits via localStorage — replaceState (not pushState) since
+  // switching models isn't a "back button" navigation.
+  function persistSelectedModel(modelName) {
+    try {
+      localStorage.setItem(SELECTED_MODEL_STORAGE_KEY, modelName);
+    } catch (_err) {
+      // Private browsing / blocked storage — selection still works for this
+      // session via the URL and in-memory <select>, just doesn't persist.
+    }
+    const url = new URL(window.location.href);
+    url.searchParams.set("model", modelName);
+    window.history.replaceState({}, "", url);
+  }
+
+  function pickInitialModel(availableModelNames) {
+    const fromUrl = new URLSearchParams(window.location.search).get("model");
+    if (fromUrl && availableModelNames.includes(fromUrl)) return fromUrl;
+
+    let fromStorage = null;
+    try {
+      fromStorage = localStorage.getItem(SELECTED_MODEL_STORAGE_KEY);
+    } catch (_err) {
+      // Ignore — storage unavailable, fall through to the default below.
+    }
+    if (fromStorage && availableModelNames.includes(fromStorage)) return fromStorage;
+
+    return availableModelNames[0];
+  }
+
+  async function loadLatest(modelName) {
+    showLoading();
+    try {
+      const resp = await fetch(`${API_BASE}/v1/models/${encodeURIComponent(modelName)}/predictions/latest`);
+      if (!resp.ok) {
+        const err = await resp.json().catch(() => ({}));
+        throw new Error(err.detail || `HTTP ${resp.status}`);
+      }
+      const data = await resp.json();
+      render(data);
+    } catch (err) {
+      showError(`Failed to load the latest regime: ${err.message}`);
+    }
+  }
+
+  async function init() {
+    showLoading();
+    loadingEl.textContent = "Loading available models…";
+    try {
+      const resp = await fetch(`${API_BASE}/v1/models?stage=production`);
+      if (!resp.ok) {
+        const err = await resp.json().catch(() => ({}));
+        throw new Error(err.detail || `HTTP ${resp.status}`);
+      }
+      const items = await resp.json();
+      const modelNames = [...new Set(items.map(item => item.model_name))].sort();
+
+      if (modelNames.length === 0) {
+        showError("No models are currently in production.");
+        return;
+      }
+
+      modelSelectEl.innerHTML = modelNames
+        .map(name => `<option value="${name}">${name}</option>`)
+        .join("");
+      modelSelectEl.disabled = false;
+
+      const initialModel = pickInitialModel(modelNames);
+      modelSelectEl.value = initialModel;
+      persistSelectedModel(initialModel);
+
+      modelSelectEl.addEventListener("change", () => {
+        const selected = modelSelectEl.value;
+        persistSelectedModel(selected);
+        loadLatest(selected);
+      });
+
+      await loadLatest(initialModel);
+    } catch (err) {
+      showError(`Failed to load available models: ${err.message}`);
+    }
+  }
+
+  init();
+
+  // Decorative only — cursor spotlight + scroll-reveal entrance, no effect on data/state.
+  document.querySelectorAll(".card").forEach((el) => {
+    el.addEventListener("pointermove", (e) => {
+      const rect = el.getBoundingClientRect();
+      el.style.setProperty("--mx", `${e.clientX - rect.left}px`);
+      el.style.setProperty("--my", `${e.clientY - rect.top}px`);
+    });
+  });
+
+  document.querySelectorAll("[data-reveal]").forEach((el) => {
+    const io = new IntersectionObserver(([entry]) => {
+      if (entry.isIntersecting) {
+        el.classList.remove("fly-in-hidden");
+        el.classList.add("animate-fly-in");
+        io.disconnect();
+      }
+    }, { threshold: 0.15, rootMargin: "0px 0px -40px 0px" });
+    io.observe(el);
+  });
+</script>
+
+</body>
+</html>
