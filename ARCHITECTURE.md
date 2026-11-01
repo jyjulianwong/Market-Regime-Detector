@@ -508,7 +508,7 @@ classDiagram
         <<module predict.py>>
         DEFAULT_LOOKBACK_DAYS = 730
         run_prediction(s3, ddb, bucket, table, model_id, model_name, source, start, end, asof) PredictionResult
-        model_id pins an exact version; model_name resolves<br/>to that family's production model; one of the two is required
+        model_id pins an exact version; model_name resolves<br/>to that family's production model, one of the two is required
         _axis_posteriors() monthly filter + daily preview
     }
     class outputs {
@@ -868,7 +868,7 @@ sequenceDiagram
     OUT->>S3: predictions/model_name=NAME/model_id=ID/latest.json (overwrite)
     OUT->>S3: predictions/model_name=NAME/model_id=ID/history.json (overwrite)
     OUT->>S3: snapshots/asof=DATE.json (write-once)
-    Note over H: repeats once per model_name when the event had neither key;<br/>each family's failure is caught/logged independently
+    Note over H: repeats once per model_name when the event had neither key,<br/>each family's failure is caught/logged independently
 
     Browser->>API: GET /v1/models?stage=production
     API-->>Browser: distinct model_name values populate the <select><br/>(URL ?model= / localStorage picks the initial one)
