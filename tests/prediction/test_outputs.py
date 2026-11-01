@@ -8,7 +8,6 @@ import pytest
 from moto import mock_aws
 from mypy_boto3_s3.client import S3Client
 
-from market_regime_detector.common.disclaimer import DISCLAIMER
 from market_regime_detector.prediction.diagnostics import DataPoint
 from market_regime_detector.prediction.outputs import (
     to_history_json,
@@ -112,7 +111,7 @@ def test_to_latest_json_shape() -> None:
     assert latest_json["dataset_id"] == "ds-test"
     assert latest_json["observation_date"] == "2024-01-20"
     assert latest_json["is_stale"] is False
-    assert latest_json["disclaimer"] == DISCLAIMER
+    assert "disclaimer" not in latest_json
     latest = latest_json["latest"]
     assert isinstance(latest, dict)
     assert latest["p_growth_up"] == pytest.approx(0.7)

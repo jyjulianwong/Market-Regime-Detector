@@ -3,7 +3,6 @@ from typing import TYPE_CHECKING
 
 from botocore.exceptions import ClientError
 
-from market_regime_detector.common.disclaimer import DISCLAIMER
 from market_regime_detector.common.quadrants import QUADRANT_NAMES
 from market_regime_detector.prediction.diagnostics import DataPoint
 from market_regime_detector.prediction.predict import PredictionResult
@@ -28,7 +27,7 @@ def _data_point_json(point: DataPoint) -> dict[str, object]:
 
 
 def to_latest_json(result: PredictionResult) -> dict[str, object]:
-    """Brief section 5's shape, plus `disclaimer` and the `data`/`features` input
+    """Brief section 5's shape, plus the `data`/`features` input
     diagnostics (2026-11-01 extension). `data`/`features` only ever appear nested
     inside a non-null `latest` — `result.data`/`result.features` are empty on
     every `_empty_prediction_result` early return, so there's nothing to nest when
@@ -60,7 +59,6 @@ def to_latest_json(result: PredictionResult) -> dict[str, object]:
         "is_stale": result.is_stale,
         "latest": latest,
         "warnings": result.warnings,
-        "disclaimer": DISCLAIMER,
     }
 
 

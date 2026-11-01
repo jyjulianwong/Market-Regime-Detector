@@ -194,7 +194,6 @@ classDiagram
         configure_logging(level)
         JSONFormatter
         get_git_sha()
-        DISCLAIMER
     }
 
     settings_py --> Settings

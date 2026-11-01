@@ -3,8 +3,6 @@ from typing import Any
 
 from pydantic import BaseModel
 
-from market_regime_detector.common.disclaimer import DISCLAIMER
-
 
 class HealthResponse(BaseModel):
     status: str = "ok"
@@ -72,10 +70,7 @@ class LatestSnapshot(BaseModel):
 
 
 class LatestPredictionResponse(BaseModel):
-    """Brief section 5's shape. `disclaimer` has a default so it's present even
-    though this is "every response that contains regime information" (brief
-    section 3.4), not literally every endpoint.
-    """
+    """Brief section 5's shape."""
 
     model_id: str
     model_name: str
@@ -86,7 +81,6 @@ class LatestPredictionResponse(BaseModel):
     is_stale: bool
     latest: LatestSnapshot | None
     warnings: list[str]
-    disclaimer: str = DISCLAIMER
 
 
 class HistoryRecord(BaseModel):
@@ -99,14 +93,8 @@ class HistoryRecord(BaseModel):
 
 
 class HistoryResponse(BaseModel):
-    """`prediction/outputs.to_history_json` doesn't itself write a `disclaimer`
-    key — the default below supplies it here at serve time instead of editing
-    Phase 6's stored JSON shape.
-    """
-
     model_id: str
     model_name: str
     dataset_id: str
     generated_at: datetime
     history: list[HistoryRecord]
-    disclaimer: str = DISCLAIMER

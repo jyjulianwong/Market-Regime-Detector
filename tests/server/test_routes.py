@@ -8,7 +8,6 @@ import pytest
 from fastapi.testclient import TestClient
 from moto import mock_aws
 
-from market_regime_detector.common.disclaimer import DISCLAIMER
 from market_regime_detector.common.model_registry import promote_model, put_model_item
 from market_regime_detector.common.settings import get_settings
 from market_regime_detector.server.app import app
@@ -145,7 +144,6 @@ def _latest_json(
         "is_stale": is_stale,
         "latest": latest,
         "warnings": [],
-        "disclaimer": DISCLAIMER,
     }
 
 
@@ -251,7 +249,7 @@ def test_get_latest_prediction_resolves_production_model_by_name() -> None:
     assert body["model_id"] == "mrd-1"
     assert body["model_name"] == MODEL_NAME
     assert body["latest"]["regime"] == "GROWTH_UP_INFLATION_DOWN"
-    assert body["disclaimer"] == DISCLAIMER
+    assert "disclaimer" not in body
     assert body["is_stale"] is False
 
 
@@ -371,7 +369,7 @@ def test_get_prediction_history_default() -> None:
     assert response.status_code == 200
     body = response.json()
     assert len(body["history"]) == 2
-    assert body["disclaimer"] == DISCLAIMER
+    assert "disclaimer" not in body
 
 
 def test_get_prediction_history_filters_by_date_range() -> None:
