@@ -4,11 +4,12 @@ with `training.build_model.DEFAULT_HYPERPARAMETERS` against four causal baseline
 writing `evaluation.json` and `evaluation.md` to `--output-dir`.
 
 Usage:
-    uv run python scripts/evaluate_model.py --start 2000-01-01 --output-dir ./eval/baseline-v1
-    uv run python scripts/evaluate_model.py --start 2000-01-01 --output-dir ./eval/dev \
-        --dev-end 2018-12-31 --dev-only
-    uv run python scripts/evaluate_model.py --start 2000-01-01 --output-dir ./eval/v2 \
-        --feature-config v2
+    uv run python scripts/evaluate_model.py --start 2000-01-01 \
+        --output-dir ./evaluation/allweather-hmm2naive-us/baseline-v1
+    uv run python scripts/evaluate_model.py --start 2000-01-01 \
+        --output-dir ./evaluation/allweather-hmm2naive-us/dev --dev-end 2018-12-31 --dev-only
+    uv run python scripts/evaluate_model.py --start 2000-01-01 \
+        --output-dir ./evaluation/allweather-hmm2naive-us/v2 --feature-config v2
 
 A thin wrapper around `market_regime_detector.training` — no scoring logic of its
 own. This never changes features, hyperparameters, or the model itself; it only

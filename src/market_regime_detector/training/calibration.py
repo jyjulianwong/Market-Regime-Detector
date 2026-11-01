@@ -1,4 +1,4 @@
-"""v4 posterior calibration (`docs/model_cards/v4/MODEL_CARD.md`, experiment E1).
+"""v4 posterior calibration (`docs/model_cards/allweather-hmm2naive-us/v4/MODEL_CARD.md`, experiment E1).
 
 `prediction/predict.py::_axis_posteriors` emits the HMM's raw filtered
 posterior, `P(axis up)`. Phase 4's walk-forward evaluation (F1 in the v4

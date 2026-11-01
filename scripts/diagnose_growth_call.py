@@ -18,7 +18,7 @@ filtered alpha) and the transition matrix, which this script reports separately
 rather than folding into the per-feature numbers.
 
 This is a diagnostic only: no model change, no new metric fed back into
-training. See `docs/model_cards/v4/MODEL_CARD.md` for how this was used.
+training. See `docs/model_cards/allweather-hmm2naive-us/v4/MODEL_CARD.md` for how this was used.
 """
 
 import argparse

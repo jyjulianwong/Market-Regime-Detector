@@ -806,7 +806,7 @@ that config, reads the label series from the lake (`build_label_set`), and calls
 `run_evaluation`, which scores the HMM's walk-forward posteriors against four
 causal baselines (climatology, calibrated persistence, fixed rule, logistic) on
 dev/holdout splits. It writes `evaluation.json` and `evaluation.md` locally and
-publishes nothing — see `docs/model_cards/v3/MODEL_CARD.md` for the model's
+publishes nothing — see `docs/model_cards/allweather-hmm2naive-us/v3/MODEL_CARD.md` for the model's
 development history and reference evaluation runs.
 
 **What `run_evaluation` actually measures, per axis and per split (dev/holdout/all):**
@@ -920,7 +920,7 @@ One versioned S3 bucket (`Settings.s3_bucket_name`) plus one DynamoDB table.
 | Change schedules, IAM, Lambdas | `terraform/main.tf`, `docker/batch-lambda.Dockerfile`, `scripts/package_lambda.sh` |
 | Change CI/CD | `.github/workflows/deploy-terraform.yml`, `deploy-client.yml` |
 | Run something by hand | `scripts/` — `ingest_data.py`, `train_model.py`, `evaluate_model.py`, `publish_model.py`, `promote_model.py`, `run_prediction.py` (thin wrappers, no logic of their own) |
-| Understand how the current feature config/model got here | `docs/model_cards/v3/MODEL_CARD.md` — the 8-phase accuracy-improvement plan's full history: decisions, ablation tables, bugs found and fixed |
+| Understand how the current feature config/model got here | `docs/model_cards/allweather-hmm2naive-us/v3/MODEL_CARD.md` — the 8-phase accuracy-improvement plan's full history: decisions, ablation tables, bugs found and fixed |
 
 Tests mirror the source tree: `tests/common`, `tests/ingestion` (+ `providers/`),
 `tests/training`, `tests/prediction`, `tests/server`.

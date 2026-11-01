@@ -62,7 +62,7 @@ count) on both axes, and beat every tighter clip tried too — not monotonic
 below 3, so this wasn't "tighter is always better." `median_mad` narrowly beat
 `winsorized` at `clip=3.0` on both axes. Before/after, `v1` feature config,
 full history, no holdout split held out of this comparison (see
-`eval/baseline-v1/` → `eval/phase1-robust-scaling/`):
+`evaluation/allweather-hmm2naive-us/baseline-v1/` → `evaluation/allweather-hmm2naive-us/phase1-robust-scaling/`):
 
 | axis      | metric              | before (StandardScaler) | after (median_mad, clip=3) |
 |-----------|---------------------|-------------------------:|----------------------------:|

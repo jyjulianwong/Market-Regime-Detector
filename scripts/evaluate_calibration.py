@@ -2,8 +2,8 @@
 """v4 experiment E1: does Platt-calibrating the raw HMM posterior beat it?
 
 Usage:
-    uv run python scripts/evaluate_calibration.py --start 2000-01-01 --output-dir eval/v4-calibration \
-        --feature-config v3
+    uv run python scripts/evaluate_calibration.py --start 2000-01-01 \
+        --output-dir evaluation/allweather-hmm2naive-us/v4-calibration --feature-config v3
 
 Builds the same walk-forward OOS posteriors `scripts/evaluate_model.py` scores
 (same dataset, same `DEFAULT_HYPERPARAMETERS`), then compares four treatments

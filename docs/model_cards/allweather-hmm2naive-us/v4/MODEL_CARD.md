@@ -77,7 +77,7 @@ persistence the way growth's 83.3% is.
 
 ### D2. Growth's state occupancy vs. its own label
 
-`eval/v3/evaluation.json`'s occupancy report: over the growth axis's
+`evaluation/allweather-hmm2naive-us/v3/evaluation.json`'s occupancy report: over the growth axis's
 evaluated window (2019-03 to 2026-10, 92 months), the HMM's own states are
 **42.4% UP / 57.6% DOWN**. The true `CFNAI-MA3 > 0` label's own UP fraction
 over the *identical* window is **35.6%** (last 24 months: 33.3%).
@@ -91,8 +91,8 @@ there's nothing here to fix.
 
 ### D3. Regenerated the `v3` evaluation
 
-`eval/v3/` (previously missing — only `eval/baseline-v1/` and
-`eval/phase1-robust-scaling/` existed). `scripts/evaluate_model.py
+`evaluation/allweather-hmm2naive-us/v3/` (previously missing — only `evaluation/allweather-hmm2naive-us/baseline-v1/` and
+`evaluation/allweather-hmm2naive-us/phase1-robust-scaling/` existed). `scripts/evaluate_model.py
 --feature-config v3 --start 2000-01-01` (scored through `2026-10-31`):
 
 | axis | split | n | log loss | AUC | skill vs. climatology [95% CI] | ECE |
@@ -361,7 +361,7 @@ Future external accuracy checks of this model should compare against
 **`CFNAI-MA3 > 0`** (above/below-trend growth, not GDP or payroll levels)
 and **3-month-annualized CPI vs. its own trailing YoY rate 3 months prior**
 (acceleration, not the CPI level) — see "Label definitions" in
-`eval/v3/evaluation.md` for the exact wording. D4 shows checking the
+`evaluation/allweather-hmm2naive-us/v3/evaluation.md` for the exact wording. D4 shows checking the
 evaluator's own GDP/payroll-style claims is still useful context, but the
 model is scored against, and should be defended against, the two
 pre-registered labels above.
@@ -416,7 +416,7 @@ explicit step after this card's analysis was already written.
   historical re-run).
 - P2's client change has not been visually verified in a real browser.
 - P4 (ongoing out-of-sample scoring log) is real future work, not started.
-- `docs/model_cards/v3/MODEL_CARD.md`'s own walk-forward-evaluation docstring
+- `docs/model_cards/allweather-hmm2naive-us/v3/MODEL_CARD.md`'s own walk-forward-evaluation docstring
   claim ("independent-segment... forward-filtered from its own start") was
   found, while reading `training/evaluation.py` for this work, to already
   contradict the current code (the filter's memory *is* carried across
