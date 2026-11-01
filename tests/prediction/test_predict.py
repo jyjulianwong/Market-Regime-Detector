@@ -21,6 +21,7 @@ from market_regime_detector.common.feature_config import (
 from market_regime_detector.common.forward_filter import filtered_posterior, preview_posterior
 from market_regime_detector.common.model_registry import promote_model, put_model_item
 from market_regime_detector.ingestion.lake import write_to_lake
+from market_regime_detector.ingestion.series_catalog import FIRST_PASS_SERIES
 from market_regime_detector.prediction.predict import (
     PredictionResult,
     _fetch_raw_series,
@@ -248,6 +249,30 @@ def _run_monthly_fixture_prediction(s3: S3Client, dynamodb: DynamoDBClient) -> P
         end=date(2024, 2, 29),
         asof=date(2024, 2, 29),
     )
+
+
+def test_run_prediction_populates_data_and_feature_diagnostics(
+    aws: tuple[S3Client, DynamoDBClient],
+) -> None:
+    """`data` covers every first-pass lake series (most never ingested in this
+    fixture, so most come back null) while `features` covers exactly this
+    model's two features, with real transformed values."""
+    s3, dynamodb = aws
+    _setup_monthly_fixture(s3, dynamodb)
+
+    result = _run_monthly_fixture_prediction(s3, dynamodb)
+
+    assert len(result.data) == len(FIRST_PASS_SERIES)
+    assert {p.name for p in result.data} == {spec.series_id for spec in FIRST_PASS_SERIES}
+    # GROWTH_SERIES/INFLATION_SERIES (this fixture's made-up series) aren't in the
+    # real catalog, so every lake diagnostic entry is null here — expected, not a
+    # bug in the test fixture.
+    assert all(p.value is None for p in result.data)
+
+    assert {p.name for p in result.features} == {"growth_f1", "inflation_f1"}
+    growth_point = next(p for p in result.features if p.name == "growth_f1")
+    assert growth_point.value == pytest.approx(GROWTH_MONTHLY_VALUES[-1])
+    assert growth_point.lag_days is not None
 
 
 def test_run_prediction_month_end_day_equals_monthly_filtered_posterior(

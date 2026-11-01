@@ -9,6 +9,7 @@ from moto import mock_aws
 from mypy_boto3_s3.client import S3Client
 
 from market_regime_detector.common.disclaimer import DISCLAIMER
+from market_regime_detector.prediction.diagnostics import DataPoint
 from market_regime_detector.prediction.outputs import (
     to_history_json,
     to_latest_json,
@@ -47,6 +48,40 @@ def _history_df(dates: list[str]) -> pd.DataFrame:
     )
 
 
+def _data_points() -> list[DataPoint]:
+    return [
+        DataPoint(
+            name="INDPRO",
+            description="Industrial Production Index",
+            value=103.5,
+            date=date(2024, 1, 1),
+            realtime_start=date(2024, 1, 15),
+            lag_days=5,
+        ),
+        DataPoint(
+            name="PAYEMS",
+            description="All Employees, Total Nonfarm (nonfarm payrolls)",
+            value=None,
+            date=None,
+            realtime_start=None,
+            lag_days=None,
+        ),
+    ]
+
+
+def _feature_points() -> list[DataPoint]:
+    return [
+        DataPoint(
+            name="indpro_3m_change",
+            description="3-month % change in Industrial Production (growth)",
+            value=0.012,
+            date=date(2024, 1, 1),
+            realtime_start=date(2024, 1, 15),
+            lag_days=5,
+        ),
+    ]
+
+
 def _result(
     model_id: str = "mrd-20260101-abcdef12",
     model_name: str = "allweather-hmm2naive-us",
@@ -62,6 +97,8 @@ def _result(
         is_stale=False,
         warnings=[],
         history=_history_df(["2024-01-19", "2024-01-20"]),
+        data=_data_points(),
+        features=_feature_points(),
     )
 
 
@@ -86,6 +123,24 @@ def test_to_latest_json_shape() -> None:
         "GROWTH_DOWN_INFLATION_UP",
         "GROWTH_DOWN_INFLATION_DOWN",
     }
+
+    data = latest["data"]
+    assert isinstance(data, list)
+    assert data[0] == {
+        "name": "INDPRO",
+        "description": "Industrial Production Index",
+        "value": 103.5,
+        "date": "2024-01-01",
+        "realtime_start": "2024-01-15",
+        "lag_days": 5,
+    }
+    assert data[1]["value"] is None
+    assert data[1]["date"] is None
+
+    features = latest["features"]
+    assert isinstance(features, list)
+    assert features[0]["name"] == "indpro_3m_change"
+    assert features[0]["value"] == pytest.approx(0.012)
 
 
 def test_to_latest_json_handles_empty_history() -> None:

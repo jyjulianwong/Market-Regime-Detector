@@ -41,12 +41,34 @@ class QuadrantProbabilities(BaseModel):
     GROWTH_DOWN_INFLATION_DOWN: float
 
 
+class DataPoint(BaseModel):
+    """One row of the `latest.data`/`latest.features` input diagnostics — shared
+    shape for a raw lake series (`data`) and a model's transformed feature
+    (`features`). See `prediction/diagnostics.py` for how each is computed.
+    """
+
+    name: str
+    description: str
+    value: float | None
+    # `realtime_start` before `date` — mypy resolves a bare `date` annotation
+    # against whatever `date` refers to *at that point* in the class body, so
+    # declaring the `date` field first would shadow the `datetime.date` type for
+    # every annotation after it in this same class.
+    realtime_start: date | None
+    date: date | None
+    lag_days: int | None
+
+
 class LatestSnapshot(BaseModel):
     p_growth_up: float
     p_inflation_up: float
     quadrants: QuadrantProbabilities
     regime: str
     confidence: float
+    # Defaulted to `[]`, not required — a `latest.json` written before this field
+    # existed (and not yet overwritten by a fresh batch run) must still validate.
+    data: list[DataPoint] = []
+    features: list[DataPoint] = []
 
 
 class LatestPredictionResponse(BaseModel):

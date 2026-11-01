@@ -371,6 +371,78 @@
       text-align: center;
     }
 
+    .diag-section { margin-top: 28px; }
+    .diag-section:first-child { margin-top: 0; }
+    .diag-heading {
+      font-family: "JetBrains Mono", ui-monospace, monospace;
+      font-size: 0.68rem;
+      font-weight: 500;
+      color: #64748b;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      margin-bottom: 10px;
+    }
+    .diag-table-wrap {
+      overflow-x: auto;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 10px;
+    }
+    table.diag-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.78rem;
+    }
+    table.diag-table th,
+    table.diag-table td {
+      padding: 8px 10px;
+      text-align: left;
+      white-space: nowrap;
+    }
+    table.diag-table th {
+      font-family: "JetBrains Mono", ui-monospace, monospace;
+      font-size: 0.62rem;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: #64748b;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    }
+    table.diag-table td {
+      color: #cbd5e1;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+    }
+    table.diag-table td.diag-desc {
+      color: #94a3b8;
+      white-space: normal;
+      min-width: 220px;
+    }
+    table.diag-table td.diag-value,
+    table.diag-table td.diag-date,
+    table.diag-table td.diag-lag {
+      font-family: "JetBrains Mono", ui-monospace, monospace;
+    }
+    table.diag-table tr:last-child td { border-bottom: none; }
+    table.diag-table tr.diag-stale td.diag-lag { color: #f3ddae; }
+
+    details.diag-details summary {
+      cursor: pointer;
+      font-family: "JetBrains Mono", ui-monospace, monospace;
+      font-size: 0.72rem;
+      color: #94a3b8;
+      padding: 4px 0;
+      list-style: none;
+      transition: color 0.2s ease;
+    }
+    details.diag-details summary::-webkit-details-marker { display: none; }
+    details.diag-details summary::before { content: "▸ "; color: #e7c47e; }
+    details.diag-details[open] summary::before { content: "▾ "; }
+    details.diag-details summary:hover { color: #f3ddae; }
+
+    .diag-empty {
+      font-size: 0.82rem;
+      color: #64748b;
+      padding: 14px;
+    }
+
     footer {
       position: relative;
       text-align: center;
@@ -527,6 +599,44 @@
       <p class="disclaimer" id="disclaimer-text"></p>
     </div>
   </div>
+
+  <div class="card fly-in-hidden" id="diagnostics-card" data-reveal style="display:none">
+    <div class="eyebrow">
+      <span class="eyebrow-index font-mono">02</span>
+      <span class="eyebrow-rule"></span>
+    </div>
+    <h2>Model Inputs</h2>
+    <p class="subtitle">
+      The exact feature values this model saw for the prediction above, and every
+      raw data stream currently tracked in the data lake.
+    </p>
+
+    <div class="diag-section">
+      <div class="diag-heading">Features used by this model</div>
+      <div class="diag-table-wrap">
+        <table class="diag-table">
+          <thead>
+            <tr><th>Feature</th><th>Description</th><th>Value</th><th>Date</th><th>Lag</th></tr>
+          </thead>
+          <tbody id="features-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="diag-section">
+      <details class="diag-details">
+        <summary id="data-summary">All data streams in the lake</summary>
+        <div class="diag-table-wrap" style="margin-top:10px">
+          <table class="diag-table">
+            <thead>
+              <tr><th>Series</th><th>Description</th><th>Value</th><th>Date</th><th>Lag</th></tr>
+            </thead>
+            <tbody id="data-tbody"></tbody>
+          </table>
+        </div>
+      </details>
+    </div>
+  </div>
 </main>
 
 <footer>
@@ -571,6 +681,72 @@
     });
   }
 
+  function escapeHtml(s) {
+    return String(s)
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;");
+  }
+
+  function formatDiagValue(v) {
+    if (v === null || v === undefined) return "—";
+    const abs = Math.abs(v);
+    // Small/fractional feature values (rates of change, ratios) read better with
+    // more decimal places than a raw price level — a fixed precision either
+    // truncates the former to 0.00 or drags the latter into noisy digits.
+    const decimals = abs !== 0 && abs < 1 ? 4 : 2;
+    return v.toFixed(decimals);
+  }
+
+  function formatDiagLag(lagDays) {
+    return lagDays === null || lagDays === undefined ? "—" : `${lagDays}d`;
+  }
+
+  // Lag beyond this is flagged visually — a loose "probably hasn't updated in
+  // over a month" heuristic, not tied to any one series' real publication
+  // cadence (the API's own `is_stale`/staleness warnings are the authoritative
+  // signal; this is just a visual nudge in the table).
+  const DIAG_STALE_LAG_DAYS = 45;
+
+  function renderDiagTable(tbodyId, points, emptyMessage) {
+    const tbody = document.getElementById(tbodyId);
+    if (!points || points.length === 0) {
+      tbody.innerHTML = `<tr><td colspan="5" class="diag-empty">${escapeHtml(emptyMessage)}</td></tr>`;
+      return;
+    }
+    tbody.innerHTML = points
+      .map((p) => {
+        const stale = typeof p.lag_days === "number" && p.lag_days > DIAG_STALE_LAG_DAYS;
+        return `<tr class="${stale ? "diag-stale" : ""}">
+          <td>${escapeHtml(p.name)}</td>
+          <td class="diag-desc">${escapeHtml(p.description || "—")}</td>
+          <td class="diag-value">${formatDiagValue(p.value)}</td>
+          <td class="diag-date">${p.date ? escapeHtml(p.date) : "—"}</td>
+          <td class="diag-lag">${formatDiagLag(p.lag_days)}</td>
+        </tr>`;
+      })
+      .join("");
+  }
+
+  function renderDiagnostics(latest) {
+    const card = document.getElementById("diagnostics-card");
+    if (!latest) {
+      card.style.display = "none";
+      return;
+    }
+    card.style.display = "block";
+
+    const features = latest.features || [];
+    const lakeData = latest.data || [];
+    const waitingMessage =
+      "Not available for this prediction — will appear once the next scheduled run writes it.";
+
+    renderDiagTable("features-tbody", features, waitingMessage);
+    renderDiagTable("data-tbody", lakeData, waitingMessage);
+    document.getElementById("data-summary").textContent =
+      `All data streams in the lake (${lakeData.length})`;
+  }
+
   function render(data) {
     headerAsofEl.textContent = `As of ${data.asof}`;
 
@@ -586,6 +762,7 @@
       errorEl.style.display = "block";
       errorEl.textContent = "No regime estimate is available for this model yet.";
       loadingEl.style.display = "none";
+      document.getElementById("diagnostics-card").style.display = "none";
       return;
     }
 
@@ -620,6 +797,8 @@
 
     document.getElementById("disclaimer-text").textContent = data.disclaimer;
 
+    renderDiagnostics(latest);
+
     loadingEl.style.display = "none";
     contentEl.style.display = "block";
   }
@@ -631,6 +810,7 @@
     contentEl.style.display = "none";
     document.getElementById("stale-banner").style.display = "none";
     document.getElementById("warnings-list").style.display = "none";
+    document.getElementById("diagnostics-card").style.display = "none";
   }
 
   function showError(message) {

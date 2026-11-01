@@ -95,8 +95,45 @@ def _promote(model_id: str) -> None:
 
 
 def _latest_json(
-    model_id: str, generated_at: str, is_stale: bool = False, model_name: str = MODEL_NAME
+    model_id: str,
+    generated_at: str,
+    is_stale: bool = False,
+    model_name: str = MODEL_NAME,
+    include_diagnostics: bool = False,
 ) -> dict[str, object]:
+    latest: dict[str, object] = {
+        "p_growth_up": 0.7,
+        "p_inflation_up": 0.3,
+        "quadrants": {
+            "GROWTH_UP_INFLATION_DOWN": 0.49,
+            "GROWTH_UP_INFLATION_UP": 0.21,
+            "GROWTH_DOWN_INFLATION_UP": 0.09,
+            "GROWTH_DOWN_INFLATION_DOWN": 0.21,
+        },
+        "regime": "GROWTH_UP_INFLATION_DOWN",
+        "confidence": 0.49,
+    }
+    if include_diagnostics:
+        latest["data"] = [
+            {
+                "name": "INDPRO",
+                "description": "Industrial Production Index",
+                "value": 103.5,
+                "date": "2024-01-01",
+                "realtime_start": "2024-01-15",
+                "lag_days": 5,
+            }
+        ]
+        latest["features"] = [
+            {
+                "name": "indpro_3m_change",
+                "description": "3-month % change in Industrial Production (growth)",
+                "value": 0.012,
+                "date": "2024-01-01",
+                "realtime_start": "2024-01-15",
+                "lag_days": 5,
+            }
+        ]
     return {
         "model_id": model_id,
         "model_name": model_name,
@@ -105,18 +142,7 @@ def _latest_json(
         "generated_at": generated_at,
         "observation_date": "2024-01-20",
         "is_stale": is_stale,
-        "latest": {
-            "p_growth_up": 0.7,
-            "p_inflation_up": 0.3,
-            "quadrants": {
-                "GROWTH_UP_INFLATION_DOWN": 0.49,
-                "GROWTH_UP_INFLATION_UP": 0.21,
-                "GROWTH_DOWN_INFLATION_UP": 0.09,
-                "GROWTH_DOWN_INFLATION_DOWN": 0.21,
-            },
-            "regime": "GROWTH_UP_INFLATION_DOWN",
-            "confidence": 0.49,
-        },
+        "latest": latest,
         "warnings": [],
         "disclaimer": "Descriptive regime information only; not investment advice.",
     }
@@ -146,14 +172,20 @@ def _history_json(model_id: str, model_name: str = MODEL_NAME) -> dict[str, obje
 
 
 def _put_predictions(
-    model_id: str, generated_at: str, is_stale: bool = False, model_name: str = MODEL_NAME
+    model_id: str,
+    generated_at: str,
+    is_stale: bool = False,
+    model_name: str = MODEL_NAME,
+    include_diagnostics: bool = False,
 ) -> None:
     s3 = boto3.client("s3", region_name=settings.aws_region)
     prefix = f"predictions/model_name={model_name}/model_id={model_id}"
     s3.put_object(
         Bucket=BUCKET,
         Key=f"{prefix}/latest.json",
-        Body=json.dumps(_latest_json(model_id, generated_at, is_stale, model_name)).encode(),
+        Body=json.dumps(
+            _latest_json(model_id, generated_at, is_stale, model_name, include_diagnostics)
+        ).encode(),
     )
     s3.put_object(
         Bucket=BUCKET,
@@ -220,6 +252,43 @@ def test_get_latest_prediction_resolves_production_model_by_name() -> None:
     assert body["latest"]["regime"] == "GROWTH_UP_INFLATION_DOWN"
     assert body["disclaimer"] == "Descriptive regime information only; not investment advice."
     assert body["is_stale"] is False
+
+
+def test_get_latest_prediction_defaults_diagnostics_to_empty_when_absent() -> None:
+    """A `latest.json` written before the `data`/`features` diagnostics existed
+    (and not yet overwritten by a fresh batch run) must still validate — these
+    fields default to `[]` rather than making the whole response 500."""
+    _put_registry_item("mrd-1", "staging")
+    _promote("mrd-1")
+    _put_predictions("mrd-1", datetime.now(UTC).isoformat(), include_diagnostics=False)
+
+    response = client.get(f"/v1/models/{MODEL_NAME}/predictions/latest")
+
+    assert response.status_code == 200
+    assert response.json()["latest"]["data"] == []
+    assert response.json()["latest"]["features"] == []
+
+
+def test_get_latest_prediction_surfaces_data_and_feature_diagnostics() -> None:
+    _put_registry_item("mrd-1", "staging")
+    _promote("mrd-1")
+    _put_predictions("mrd-1", datetime.now(UTC).isoformat(), include_diagnostics=True)
+
+    response = client.get(f"/v1/models/{MODEL_NAME}/predictions/latest")
+
+    assert response.status_code == 200
+    latest = response.json()["latest"]
+    assert latest["data"] == [
+        {
+            "name": "INDPRO",
+            "description": "Industrial Production Index",
+            "value": 103.5,
+            "date": "2024-01-01",
+            "realtime_start": "2024-01-15",
+            "lag_days": 5,
+        }
+    ]
+    assert latest["features"][0]["name"] == "indpro_3m_change"
 
 
 def test_get_latest_prediction_honors_explicit_model_id() -> None:

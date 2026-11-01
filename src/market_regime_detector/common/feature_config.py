@@ -42,6 +42,11 @@ class FeatureDefinition:
     # both legs and use `build_ratio_feature_value` instead of `build_feature_value`.
     numerator_series_id: str | None = None
     denominator_series_id: str | None = None
+    # Human-readable description surfaced by the API's `/predictions/latest`
+    # `features` diagnostic (see prediction/diagnostics.py) — documentation only,
+    # deliberately excluded from `content_hash()` (see below) so editing prose
+    # never invalidates an already-published model's `feature_config_hash`.
+    description: str = ""
 
     def __post_init__(self) -> None:
         if self.sign not in (1, -1):
@@ -82,15 +87,20 @@ class FeatureConfig:
         return cls(version=version, features=features)
 
     def content_hash(self) -> str:
-        """A stable hash of every field that defines this config's behavior — Phase
-        4's dataset manifest embeds this (brief section 4.2's `feature_config_hash`)
-        so a training run's inputs are reproducible.
+        """A stable hash of every field that defines this config's *behavior* —
+        Phase 4's dataset manifest embeds this (brief section 4.2's
+        `feature_config_hash`) so a training run's inputs are reproducible.
+
+        Deliberately excludes `description` (via `_as_jsonable(..., for_hash=True)`)
+        — it's documentation, not behavior, so editing feature prose must never
+        change this hash and silently invalidate an already-published model's
+        recorded `feature_config_hash`.
         """
-        payload = json.dumps(_as_jsonable(self), sort_keys=True)
+        payload = json.dumps(_as_jsonable(self, for_hash=True), sort_keys=True)
         return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
 
-def _as_jsonable(config: FeatureConfig) -> dict[str, object]:
+def _as_jsonable(config: FeatureConfig, *, for_hash: bool = False) -> dict[str, object]:
     return {
         "version": config.version,
         "features": [
@@ -108,6 +118,7 @@ def _as_jsonable(config: FeatureConfig) -> dict[str, object]:
                 "aggregation": f.aggregation,
                 "numerator_series_id": f.numerator_series_id,
                 "denominator_series_id": f.denominator_series_id,
+                **({} if for_hash else {"description": f.description}),
             }
             for f in config.features
         ],
@@ -150,6 +161,10 @@ def _feature_definition_from_dict(data: dict[str, object]) -> FeatureDefinition:
         aggregation=aggregation,
         numerator_series_id=data.get("numerator_series_id"),  # type: ignore[arg-type]
         denominator_series_id=data.get("denominator_series_id"),  # type: ignore[arg-type]
+        # .get(..., "") not data["description"] — a `config.json` published before
+        # this field existed has no key at all; defaulting keeps those artifacts
+        # loadable rather than raising a KeyError on every prediction run.
+        description=data.get("description", ""),  # type: ignore[arg-type]
     )
 
 
@@ -192,6 +207,7 @@ FEATURE_CONFIG_V1 = FeatureConfig(
             transform="pct_change",
             transform_params={"n_periods": 3},
             sign=1,
+            description="3-month % change in Industrial Production (growth)",
         ),
         FeatureDefinition(
             name="payems_3m_change",
@@ -204,6 +220,7 @@ FEATURE_CONFIG_V1 = FeatureConfig(
             transform="pct_change",
             transform_params={"n_periods": 3},
             sign=1,
+            description="3-month % change in nonfarm payrolls (growth)",
         ),
         FeatureDefinition(
             name="icsa_4wk_avg_change",
@@ -216,6 +233,9 @@ FEATURE_CONFIG_V1 = FeatureConfig(
             transform="rolling_mean_diff",
             transform_params={"window": 4, "diff_periods": 1},
             sign=-1,
+            description=(
+                "Change in the 4-week average of initial unemployment claims (growth, inverted)"
+            ),
         ),
         FeatureDefinition(
             name="t10y2y_level",
@@ -228,6 +248,7 @@ FEATURE_CONFIG_V1 = FeatureConfig(
             transform="identity",
             transform_params={},
             sign=1,
+            description="10Y-2Y Treasury yield spread, raw level (growth)",
         ),
         FeatureDefinition(
             name="copper_gold_3m_momentum",
@@ -242,6 +263,7 @@ FEATURE_CONFIG_V1 = FeatureConfig(
             sign=1,
             numerator_series_id="HG=F",
             denominator_series_id="GC=F",
+            description="3-month % change in the copper/gold price ratio (growth)",
         ),
         FeatureDefinition(
             name="cpilfesl_3m_annualized_change",
@@ -254,6 +276,7 @@ FEATURE_CONFIG_V1 = FeatureConfig(
             transform="pct_change_annualized",
             transform_params={"n_periods": 3, "periods_per_year": 12},
             sign=1,
+            description="3-month annualized % change in core CPI (inflation)",
         ),
         FeatureDefinition(
             name="t10yie_1m_change",
@@ -266,6 +289,7 @@ FEATURE_CONFIG_V1 = FeatureConfig(
             transform="diff",
             transform_params={"n_periods": 1},
             sign=1,
+            description="1-month change in the 10-year breakeven inflation rate (inflation)",
         ),
         FeatureDefinition(
             name="t10yie_3m_change",
@@ -278,6 +302,7 @@ FEATURE_CONFIG_V1 = FeatureConfig(
             transform="diff",
             transform_params={"n_periods": 3},
             sign=1,
+            description="3-month change in the 10-year breakeven inflation rate (inflation)",
         ),
         FeatureDefinition(
             name="dfii10_1m_change",
@@ -290,6 +315,9 @@ FEATURE_CONFIG_V1 = FeatureConfig(
             transform="diff",
             transform_params={"n_periods": 1},
             sign=-1,
+            description=(
+                "1-month change in the 10-year real (TIPS) yield, sign-flipped (inflation)"
+            ),
         ),
         FeatureDefinition(
             name="dcoilwtico_3m_change",
@@ -302,6 +330,7 @@ FEATURE_CONFIG_V1 = FeatureConfig(
             transform="pct_change",
             transform_params={"n_periods": 3},
             sign=1,
+            description="3-month % change in WTI crude oil price (inflation)",
         ),
     ),
 )
@@ -330,6 +359,7 @@ FEATURE_CONFIG_V2 = FeatureConfig(
             transform="pct_change",
             transform_params={"n_periods": 12},
             sign=1,
+            description="12-week % change in the US regular gasoline price (inflation)",
         ),
     ),
 )
@@ -359,6 +389,9 @@ FEATURE_CONFIG_V3 = FeatureConfig(
             transform="identity",
             transform_params={},
             sign=1,
+            description=(
+                "Empire State Manufacturing Survey general business conditions, raw level (growth)"
+            ),
         ),
     ),
 )

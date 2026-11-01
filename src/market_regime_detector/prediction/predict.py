@@ -1,5 +1,5 @@
 import logging
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import UTC, date, datetime, timedelta
 from typing import TYPE_CHECKING
 
@@ -20,6 +20,12 @@ from market_regime_detector.common.scaling import apply_scaler
 from market_regime_detector.ingestion.lake import read_series
 from market_regime_detector.ingestion.providers.factory import build_provider
 from market_regime_detector.ingestion.schema import validate_schema
+from market_regime_detector.ingestion.series_catalog import FIRST_PASS_SERIES
+from market_regime_detector.prediction.diagnostics import (
+    DataPoint,
+    build_data_points,
+    build_feature_points,
+)
 from market_regime_detector.prediction.model_loader import ModelArtifact, load_model_artifact
 
 if TYPE_CHECKING:
@@ -53,6 +59,14 @@ class PredictionResult:
     # One row per usable day: date, p_growth_up, p_inflation_up, regime, confidence,
     # and the four quadrant probability columns.
     history: pd.DataFrame
+    # Input-data diagnostics (brief extension, 2026-11-01), populated only on the
+    # success path (empty on every `_empty_prediction_result` early return —
+    # cheap to compute there, but never surfaced since `to_latest_json` only
+    # writes `data`/`features` inside a non-null `latest`). `default_factory`
+    # keeps every existing `PredictionResult(...)` call site (tests, mainly)
+    # valid without passing these explicitly.
+    data: list[DataPoint] = field(default_factory=list)
+    features: list[DataPoint] = field(default_factory=list)
 
 
 def _fetch_raw_series(
@@ -94,6 +108,15 @@ def _fetch_raw_series(
         provider = build_provider(provider_name_by_series[series_id])
         raw[series_id] = validate_schema(provider.fetch(series_id, start, end, asof=asof))
     return raw
+
+
+def _fetch_lake_catalog(s3: "S3Client", bucket: str) -> dict[str, pd.DataFrame]:
+    """Every series the weekly ingest Lambda maintains, read straight from the
+    lake — independent of `source`/the model's own `FeatureConfig`, since the
+    `data` diagnostic (`prediction/diagnostics.build_data_points`) reports "what's
+    currently in the lake," not what this one model happens to use.
+    """
+    return {spec.series_id: read_series(s3, bucket, spec.series_id) for spec in FIRST_PASS_SERIES}
 
 
 def _build_daily_axis_df(
@@ -423,6 +446,13 @@ def run_prediction(
     observation_date = history.index[-1].date()
     is_stale = stale_inputs or bool(warnings)
 
+    lake_raw_by_series = _fetch_lake_catalog(s3, bucket)
+    asof_ts = pd.Timestamp(effective_asof)
+    data_points = build_data_points(lake_raw_by_series, asof_ts)
+    feature_points = build_feature_points(
+        artifact.feature_config, raw_by_series, pd.Timestamp(observation_date), asof_ts
+    )
+
     return PredictionResult(
         model_id=resolved_model_id,
         model_name=resolved_model_name,
@@ -433,4 +463,6 @@ def run_prediction(
         is_stale=is_stale,
         warnings=warnings,
         history=history,
+        data=data_points,
+        features=feature_points,
     )

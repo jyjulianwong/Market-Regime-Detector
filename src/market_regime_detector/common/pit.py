@@ -1,4 +1,52 @@
+from dataclasses import dataclass
+
 import pandas as pd
+
+
+@dataclass(frozen=True)
+class LatestObservation:
+    """One row out of `latest_knowable_observation` — unlike `point_in_time_series`
+    (which collapses a whole series), this keeps `realtime_start` alongside the
+    value, since the diagnostics endpoint (`prediction/diagnostics.py`) needs both
+    "what's the latest known value" and "how long ago did we learn it" (lag) for
+    the same row.
+    """
+
+    date: pd.Timestamp
+    value: float
+    realtime_start: pd.Timestamp
+
+
+def latest_knowable_observation(
+    df: pd.DataFrame,
+    asof: pd.Timestamp,
+    *,
+    vintage_aware: bool,
+    publication_lag_days: int,
+) -> LatestObservation | None:
+    """The single most recent observation knowable as of `asof` — same two
+    causality mechanisms as `point_in_time_series` (vintage-aware `realtime_start`
+    filtering vs. a flat publication lag), but returning one row with its
+    `realtime_start` intact instead of a full date-indexed series. Returns `None`
+    if nothing is knowable yet, or every knowable row's `value` is null.
+    """
+    if vintage_aware:
+        knowable = df[df["realtime_start"] <= asof].dropna(subset=["value"])
+        if knowable.empty:
+            return None
+        row = knowable.sort_values(["date", "realtime_start"]).iloc[-1]
+    else:
+        # `Timedelta(publication_lag_days, unit="D")` rather than
+        # `Timedelta(days=...)` — see `point_in_time_series` below.
+        cutoff = asof - pd.Timedelta(publication_lag_days, unit="D")
+        knowable = df[df["date"] <= cutoff].dropna(subset=["value"])
+        if knowable.empty:
+            return None
+        row = knowable.sort_values("date").iloc[-1]
+
+    return LatestObservation(
+        date=row["date"], value=float(row["value"]), realtime_start=row["realtime_start"]
+    )
 
 
 def point_in_time_series(
