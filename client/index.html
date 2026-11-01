@@ -92,13 +92,6 @@
       background-clip: text;
       color: transparent;
     }
-    header .asof {
-      font-family: "JetBrains Mono", ui-monospace, monospace;
-      font-size: 0.78rem;
-      color: #94a3b8;
-      white-space: nowrap;
-    }
-
     .model-picker {
       display: flex;
       align-items: center;
@@ -361,7 +354,7 @@
     }
 
     .warnings {
-      margin-top: 16px;
+      margin-top: 8px;
       font-size: 0.82rem;
       color: #f3ddae;
     }
@@ -417,6 +410,12 @@
       color: #94a3b8;
       white-space: normal;
       min-width: 220px;
+    }
+    table.diag-table th:nth-child(n+3),
+    table.diag-table td.diag-value,
+    table.diag-table td.diag-date,
+    table.diag-table td.diag-lag {
+      text-align: right;
     }
     table.diag-table td.diag-value,
     table.diag-table td.diag-date,
@@ -511,7 +510,6 @@
 
 <header>
   <h1>Market <span class="accent">Regime</span> Detector</h1>
-  <span class="asof" id="header-asof"></span>
 </header>
 
 <main>
@@ -535,7 +533,10 @@
     <div id="error"></div>
 
     <div id="content">
-      <div class="stale-banner" id="stale-banner"></div>
+      <div class="stale-banner" id="stale-banner">
+        <div id="stale-banner-text"></div>
+        <ul class="warnings" id="warnings-list" style="display:none"></ul>
+      </div>
 
       <div class="regime-headline">
         <div class="label" id="regime-label">—</div>
@@ -576,21 +577,19 @@
       <div class="axis-bars">
         <div class="axis-bar">
           <div class="axis-row">
-            <span>P(Growth up)</span>
+            <span class="font-mono">P(growth="UP")</span>
             <b id="p-growth-up">—</b>
           </div>
           <div class="track"><div class="fill" id="p-growth-up-fill" style="width:0%"></div></div>
         </div>
         <div class="axis-bar">
           <div class="axis-row">
-            <span>P(Inflation up)</span>
+            <span class="font-mono">P(inflation="UP")</span>
             <b id="p-inflation-up">—</b>
           </div>
           <div class="track"><div class="fill" id="p-inflation-up-fill" style="width:0%"></div></div>
         </div>
       </div>
-
-      <ul class="warnings" id="warnings-list" style="display:none"></ul>
 
       <div class="meta-table">
         <div class="row"><span>As of</span><span id="meta-asof">—</span></div>
@@ -628,7 +627,7 @@
 
     <div class="diag-section">
       <details class="diag-details">
-        <summary id="data-summary">All data streams in the lake</summary>
+        <summary id="data-summary">All available data streams</summary>
         <div class="diag-table-wrap" style="margin-top:10px">
           <table class="diag-table">
             <thead>
@@ -667,7 +666,6 @@
   const loadingEl = document.getElementById("loading");
   const errorEl = document.getElementById("error");
   const contentEl = document.getElementById("content");
-  const headerAsofEl = document.getElementById("header-asof");
   const modelSelectEl = document.getElementById("model-select");
 
   const SELECTED_MODEL_STORAGE_KEY = "mrd_selected_model";
@@ -747,19 +745,18 @@
     renderDiagTable("features-tbody", features, waitingMessage);
     renderDiagTable("data-tbody", lakeData, waitingMessage);
     document.getElementById("data-summary").textContent =
-      `All data streams in the lake (${lakeData.length})`;
+      `All available data streams (${lakeData.length})`;
   }
 
   function render(data) {
-    headerAsofEl.textContent = `As of ${data.asof}`;
-
     const staleBanner = document.getElementById("stale-banner");
-    if (data.is_stale) {
-      staleBanner.style.display = "block";
-      staleBanner.textContent =
-        "This result is flagged stale — one or more inputs may be out of date, " +
-        "or the batch job hasn't run recently. Treat with extra caution.";
-    }
+    const staleText = document.getElementById("stale-banner-text");
+    const hasWarnings = data.warnings && data.warnings.length > 0;
+    staleText.textContent = data.is_stale
+      ? "This result is flagged stale — one or more inputs may be out of date, " +
+        "or the batch job hasn't run recently. Treat with extra caution."
+      : "";
+    if (data.is_stale || hasWarnings) staleBanner.style.display = "block";
 
     if (!data.latest) {
       errorEl.style.display = "block";
@@ -788,7 +785,7 @@
     }
 
     const warningsList = document.getElementById("warnings-list");
-    if (data.warnings && data.warnings.length > 0) {
+    if (hasWarnings) {
       warningsList.style.display = "block";
       warningsList.innerHTML = data.warnings.map(w => `<li>${w}</li>`).join("");
     }
