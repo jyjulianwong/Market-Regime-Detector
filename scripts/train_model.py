@@ -24,8 +24,10 @@ from market_regime_detector.common.aws_s3 import get_s3_client
 from market_regime_detector.common.feature_config import FEATURE_CONFIGS
 from market_regime_detector.common.logging import configure_logging
 from market_regime_detector.common.settings import get_settings
+from market_regime_detector.ingestion.lake import read_series
 from market_regime_detector.training.build_model import train_and_save_model
 from market_regime_detector.training.dataset import build_dataset
+from market_regime_detector.training.labels import build_label_set
 
 logger = logging.getLogger(__name__)
 
@@ -77,7 +79,22 @@ def main() -> None:
     for warning in cast(list[str], dataset.manifest["warnings"]):
         logger.warning(warning)
 
-    train_and_save_model(args.output_dir, dataset.growth_df, dataset.inflation_df, feature_config)
+    def _label_series(series_id: str) -> pd.Series:
+        df = read_series(s3, settings.s3_bucket_name, series_id)
+        result: pd.Series = df.sort_values("date").groupby("date")["value"].last()
+        return result
+
+    # v4 posterior calibration (`training/calibration.py`) fits each axis's
+    # calibrator from its own ground-truth label, the same evaluation-only
+    # series `scripts/evaluate_model.py` already reads from the lake (never
+    # fed to the HMM as a feature — see `training/labels.py`).
+    labels = build_label_set(
+        _label_series("CFNAIMA3"), _label_series("USREC"), _label_series("CPIAUCSL")
+    )
+
+    train_and_save_model(
+        args.output_dir, dataset.growth_df, dataset.inflation_df, feature_config, labels=labels
+    )
 
     (args.output_dir / "manifest.json").write_text(
         json.dumps(dataset.manifest, indent=2, default=str)

@@ -8,7 +8,13 @@ import pandas as pd
 from market_regime_detector.common.feature_config import FEATURE_CONFIG_V1, Axis, FeatureConfig
 from market_regime_detector.common.scaling import DEFAULT_CLIP
 from market_regime_detector.training.baseline import baseline_signal
+from market_regime_detector.training.calibration import (
+    LinearShrinkCalibrator,
+    fit_shrink_calibrator,
+    identity_shrink_calibrator,
+)
 from market_regime_detector.training.evaluation import walk_forward_evaluate
+from market_regime_detector.training.labels import LabelSet
 from market_regime_detector.training.report import (
     combine_quadrant_probabilities,
     compare_to_baseline,
@@ -55,11 +61,22 @@ def train_and_save_model(
     inflation_df: pd.DataFrame,
     feature_config: FeatureConfig = FEATURE_CONFIG_V1,
     hyperparameters: HMMHyperparameters = DEFAULT_HYPERPARAMETERS,
+    labels: LabelSet | None = None,
 ) -> None:
     """Fits both HMMs on the full history (what gets saved — walk-forward fits below
     are diagnostic only, never saved), runs walk-forward evaluation + baseline +
     episode report for honest out-of-sample metrics, and writes brief section 4.1's
     six local model-directory files.
+
+    `labels` (v4, `training/calibration.py`) fits each axis's posterior
+    calibrator — a single `LinearShrinkCalibrator` per axis, `base_rate` taken
+    from that axis's own ground-truth label over all history available at
+    train time (never refit later, same as every other trained parameter
+    here). `labels=None` (the default, and every pre-v4 call site) saves the
+    identity calibrator — a model trained without labels predicts exactly as
+    it did before this parameter existed, satisfying the backward-
+    compatibility constraint from the other direction: an **old caller** of
+    this **new** code must not get a surprise.
     """
     output_dir.mkdir(parents=True, exist_ok=True)
     hp = hyperparameters
@@ -117,6 +134,14 @@ def train_and_save_model(
         scaler_method=hp.scaler_method,
     )
 
+    growth_calibrator: LinearShrinkCalibrator = identity_shrink_calibrator()
+    inflation_calibrator: LinearShrinkCalibrator = identity_shrink_calibrator()
+    if labels is not None:
+        if labels.growth.dropna().shape[0] > 0:
+            growth_calibrator = fit_shrink_calibrator(labels.growth)
+        if labels.inflation.dropna().shape[0] > 0:
+            inflation_calibrator = fit_shrink_calibrator(labels.inflation)
+
     growth_baseline = baseline_signal(growth_df, growth_features)
     inflation_baseline = baseline_signal(inflation_df, inflation_features)
     growth_comparison = compare_to_baseline(growth_walk_forward, growth_baseline)
@@ -136,6 +161,10 @@ def train_and_save_model(
         inflation_mean=inflation_fit.scaler_mean,
         inflation_scale=inflation_fit.scaler_scale,
         inflation_clip=np.float64(inflation_fit.scaler_clip),
+        growth_calibrator_weight=np.float64(growth_calibrator.weight),
+        growth_calibrator_base_rate=np.float64(growth_calibrator.base_rate),
+        inflation_calibrator_weight=np.float64(inflation_calibrator.weight),
+        inflation_calibrator_base_rate=np.float64(inflation_calibrator.base_rate),
     )
 
     (output_dir / "labels.json").write_text(
@@ -164,6 +193,14 @@ def train_and_save_model(
     (output_dir / "metrics.json").write_text(
         json.dumps(
             {
+                "growth_calibrator": {
+                    "weight": growth_calibrator.weight,
+                    "base_rate": growth_calibrator.base_rate,
+                },
+                "inflation_calibrator": {
+                    "weight": inflation_calibrator.weight,
+                    "base_rate": inflation_calibrator.base_rate,
+                },
                 "growth_log_likelihood": growth_fit.log_likelihood,
                 "inflation_log_likelihood": inflation_fit.log_likelihood,
                 "growth_baseline_comparison": growth_comparison,

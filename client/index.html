@@ -284,6 +284,13 @@
       color: #94a3b8;
       margin-bottom: 6px;
     }
+    .q-cell .q-subtitle {
+      font-size: 0.62rem;
+      font-weight: 400;
+      color: #64748b;
+      line-height: 1.3;
+      margin-bottom: 8px;
+    }
     .q-cell .q-pct {
       font-family: "JetBrains Mono", ui-monospace, monospace;
       font-size: 1.25rem;
@@ -296,6 +303,7 @@
       box-shadow: 0 0 24px -6px rgba(231, 196, 126, 0.55);
     }
     .q-cell.active .q-name { color: #f3ddae; }
+    .q-cell.active .q-subtitle { color: #c9ab76; }
     .q-cell.active .q-pct { color: #f3ddae; }
 
     .axis-bars { margin-bottom: 8px; }
@@ -468,20 +476,24 @@
         <div class="q-axis-label inflation-up">Inflation ↑</div>
         <div class="q-cell" id="q-GROWTH_UP_INFLATION_UP">
           <div class="q-name">Reflation</div>
+          <div class="q-subtitle">above-trend growth, accelerating inflation</div>
           <div class="q-pct">—</div>
         </div>
         <div class="q-cell" id="q-GROWTH_DOWN_INFLATION_UP">
           <div class="q-name">Stagflation</div>
+          <div class="q-subtitle">below-trend growth, accelerating inflation</div>
           <div class="q-pct">—</div>
         </div>
 
         <div class="q-axis-label inflation-down">Inflation ↓</div>
         <div class="q-cell" id="q-GROWTH_UP_INFLATION_DOWN">
           <div class="q-name">Disinflationary growth</div>
+          <div class="q-subtitle">above-trend growth, decelerating inflation</div>
           <div class="q-pct">—</div>
         </div>
         <div class="q-cell" id="q-GROWTH_DOWN_INFLATION_DOWN">
           <div class="q-name">Deflation</div>
+          <div class="q-subtitle">below-trend growth, decelerating inflation</div>
           <div class="q-pct">—</div>
         </div>
       </div>

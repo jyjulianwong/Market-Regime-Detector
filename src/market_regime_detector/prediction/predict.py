@@ -155,18 +155,22 @@ def _axis_posteriors(
     to some earlier, stale anchor.
     """
     if axis == Axis.GROWTH:
-        hmm, mean, scale, clip = (
+        hmm, mean, scale, clip, calibrator_weight, calibrator_base_rate = (
             artifact_fields.growth,
             artifact_fields.growth_scaler_mean,
             artifact_fields.growth_scaler_scale,
             artifact_fields.growth_scaler_clip,
+            artifact_fields.growth_calibrator_weight,
+            artifact_fields.growth_calibrator_base_rate,
         )
     else:
-        hmm, mean, scale, clip = (
+        hmm, mean, scale, clip, calibrator_weight, calibrator_base_rate = (
             artifact_fields.inflation,
             artifact_fields.inflation_scaler_mean,
             artifact_fields.inflation_scaler_scale,
             artifact_fields.inflation_scaler_clip,
+            artifact_fields.inflation_calibrator_weight,
+            artifact_fields.inflation_calibrator_base_rate,
         )
 
     if monthly_axis_df.empty:
@@ -199,7 +203,14 @@ def _axis_posteriors(
         return pd.Series(dtype=float)
 
     posterior = np.concatenate(posterior_rows, axis=0)
-    return pd.Series(posterior[:, hmm.up_state], index=pd.DatetimeIndex(kept_dates))
+    p_up_raw = posterior[:, hmm.up_state]
+    # v4 posterior calibration (`training/calibration.LinearShrinkCalibrator`):
+    # inlined here, not imported, since `prediction/` must never import
+    # `training/` (see module-level hard dependency rule). `calibrator_weight
+    # == 1.0` (every pre-v4 artifact) makes this exactly `p_up_raw` regardless
+    # of `calibrator_base_rate` — the backward-compatible identity case.
+    p_up_calibrated = calibrator_weight * p_up_raw + (1 - calibrator_weight) * calibrator_base_rate
+    return pd.Series(p_up_calibrated, index=pd.DatetimeIndex(kept_dates))
 
 
 _EMPTY_HISTORY_COLUMNS = [

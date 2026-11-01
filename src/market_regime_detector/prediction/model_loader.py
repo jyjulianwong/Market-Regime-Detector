@@ -44,6 +44,10 @@ class ModelArtifact:
     inflation_scaler_mean: np.ndarray
     inflation_scaler_scale: np.ndarray
     inflation_scaler_clip: float
+    growth_calibrator_weight: float
+    growth_calibrator_base_rate: float
+    inflation_calibrator_weight: float
+    inflation_calibrator_base_rate: float
     feature_config: FeatureConfig
 
 
@@ -79,6 +83,13 @@ def load_model_artifact(
     neither key, so they default to `np.inf` (no clipping), reproducing exactly
     that old model's original, unclipped behavior rather than silently changing
     it under an artifact that predates clipping.
+
+    `growth_calibrator_weight`/`_base_rate` (and the `inflation_` equivalents)
+    were added by v4 (`training/calibration.py`) the same way: a pre-v4
+    artifact has none of the four keys and defaults to `weight=1.0,
+    base_rate=0.0` — the identity map regardless of `base_rate`'s value,
+    since `1.0 * p + 0.0 * base_rate == p` — so an old artifact predicts
+    exactly as it always did.
     """
     prefix = f"models/{model_name}/{model_id}"
 
@@ -101,6 +112,26 @@ def load_model_artifact(
         inflation_scaler_scale=scalers["inflation_scale"],
         inflation_scaler_clip=(
             float(scalers["inflation_clip"]) if "inflation_clip" in scalers else np.inf
+        ),
+        growth_calibrator_weight=(
+            float(scalers["growth_calibrator_weight"])
+            if "growth_calibrator_weight" in scalers
+            else 1.0
+        ),
+        growth_calibrator_base_rate=(
+            float(scalers["growth_calibrator_base_rate"])
+            if "growth_calibrator_base_rate" in scalers
+            else 0.0
+        ),
+        inflation_calibrator_weight=(
+            float(scalers["inflation_calibrator_weight"])
+            if "inflation_calibrator_weight" in scalers
+            else 1.0
+        ),
+        inflation_calibrator_base_rate=(
+            float(scalers["inflation_calibrator_base_rate"])
+            if "inflation_calibrator_base_rate" in scalers
+            else 0.0
         ),
         feature_config=FeatureConfig.from_dict(config["feature_config"]),
     )

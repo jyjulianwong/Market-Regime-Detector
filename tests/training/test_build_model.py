@@ -2,6 +2,7 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
+import pytest
 
 from market_regime_detector.common.feature_config import (
     Axis,
@@ -10,6 +11,7 @@ from market_regime_detector.common.feature_config import (
     Frequency,
 )
 from market_regime_detector.training.build_model import HMMHyperparameters, train_and_save_model
+from market_regime_detector.training.labels import LabelSet
 
 
 def _feature(name: str, axis: Axis, sign: int) -> FeatureDefinition:
@@ -80,3 +82,73 @@ def test_train_and_save_model_writes_all_six_files(tmp_path: Path) -> None:
     model_card = (output_dir / "model_card.md").read_text()
     assert "Model Card" in model_card
     assert "Limitations" in model_card
+
+
+def test_train_and_save_model_without_labels_saves_identity_calibrator(tmp_path: Path) -> None:
+    """`labels=None` (the default) must save the v4 calibrator keys as the
+    identity map — an old call site (or a feature config with no labels
+    available) must not silently start calibrating with made-up numbers."""
+    growth_df = _synthetic_two_regime_df(seed=0)
+    inflation_df = _synthetic_two_regime_df(seed=1)
+    feature_config = FeatureConfig(
+        version="test",
+        features=(
+            _feature("f1", Axis.GROWTH, sign=1),
+            _feature("f2", Axis.GROWTH, sign=1),
+            _feature("f1", Axis.INFLATION, sign=1),
+            _feature("f2", Axis.INFLATION, sign=1),
+        ),
+    )
+    output_dir = tmp_path / "model"
+
+    train_and_save_model(
+        output_dir,
+        growth_df,
+        inflation_df,
+        feature_config=feature_config,
+        hyperparameters=HMMHyperparameters(n_restarts=3, random_state=0),
+    )
+
+    scalers = np.load(output_dir / "scalers.npz")
+    assert scalers["growth_calibrator_weight"] == 1.0
+    assert scalers["growth_calibrator_base_rate"] == 0.0
+    assert scalers["inflation_calibrator_weight"] == 1.0
+    assert scalers["inflation_calibrator_base_rate"] == 0.0
+
+
+def test_train_and_save_model_with_labels_fits_shrink_calibrator(tmp_path: Path) -> None:
+    growth_df = _synthetic_two_regime_df(seed=0)
+    inflation_df = _synthetic_two_regime_df(seed=1)
+    feature_config = FeatureConfig(
+        version="test",
+        features=(
+            _feature("f1", Axis.GROWTH, sign=1),
+            _feature("f2", Axis.GROWTH, sign=1),
+            _feature("f1", Axis.INFLATION, sign=1),
+            _feature("f2", Axis.INFLATION, sign=1),
+        ),
+    )
+    output_dir = tmp_path / "model"
+
+    growth_label = pd.Series([1.0, 0.0, 1.0, 1.0], index=growth_df.index[:4])  # mean=0.75
+    inflation_label = pd.Series([0.0, 0.0, 1.0, 0.0], index=inflation_df.index[:4])  # mean=0.25
+    labels = LabelSet(
+        growth=growth_label,
+        growth_recession=growth_label,
+        inflation=inflation_label,
+    )
+
+    train_and_save_model(
+        output_dir,
+        growth_df,
+        inflation_df,
+        feature_config=feature_config,
+        hyperparameters=HMMHyperparameters(n_restarts=3, random_state=0),
+        labels=labels,
+    )
+
+    scalers = np.load(output_dir / "scalers.npz")
+    assert scalers["growth_calibrator_weight"] == 0.5
+    assert scalers["growth_calibrator_base_rate"] == pytest.approx(0.75)
+    assert scalers["inflation_calibrator_weight"] == 0.5
+    assert scalers["inflation_calibrator_base_rate"] == pytest.approx(0.25)

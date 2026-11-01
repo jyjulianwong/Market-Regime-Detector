@@ -36,7 +36,9 @@ def _put_json(client: S3Client, key: str, data: object) -> None:
     client.put_object(Bucket=BUCKET, Key=key, Body=json.dumps(data).encode())
 
 
-def _publish_fake_model(client: S3Client, *, with_clip: bool = False) -> None:
+def _publish_fake_model(
+    client: S3Client, *, with_clip: bool = False, with_calibrator: bool = False
+) -> None:
     """`with_clip=False` (the default) reproduces a pre-Phase-1 artifact —
     `scalers.npz` with no `growth_clip`/`inflation_clip` keys — so most tests
     exercise the old-artifact-compat path rather than the newer one by default.
@@ -69,6 +71,11 @@ def _publish_fake_model(client: S3Client, *, with_clip: bool = False) -> None:
     if with_clip:
         scaler_arrays["growth_clip"] = np.float64(4.0)
         scaler_arrays["inflation_clip"] = np.float64(3.0)
+    if with_calibrator:
+        scaler_arrays["growth_calibrator_weight"] = np.float64(0.5)
+        scaler_arrays["growth_calibrator_base_rate"] = np.float64(0.3)
+        scaler_arrays["inflation_calibrator_weight"] = np.float64(0.5)
+        scaler_arrays["inflation_calibrator_base_rate"] = np.float64(0.7)
     _put_npz(client, f"{prefix}/scalers.npz", **scaler_arrays)
     _put_json(
         client,
@@ -129,6 +136,30 @@ def test_load_model_artifact_new_format_reads_clip_values(s3_client: S3Client) -
 
     assert artifact.growth_scaler_clip == 4.0
     assert artifact.inflation_scaler_clip == 3.0
+
+
+def test_load_model_artifact_old_format_without_calibrator_defaults_to_identity(
+    s3_client: S3Client,
+) -> None:
+    _publish_fake_model(s3_client, with_calibrator=False)
+
+    artifact = load_model_artifact(s3_client, BUCKET, MODEL_NAME, MODEL_ID)
+
+    assert artifact.growth_calibrator_weight == 1.0
+    assert artifact.growth_calibrator_base_rate == 0.0
+    assert artifact.inflation_calibrator_weight == 1.0
+    assert artifact.inflation_calibrator_base_rate == 0.0
+
+
+def test_load_model_artifact_new_format_reads_calibrator_values(s3_client: S3Client) -> None:
+    _publish_fake_model(s3_client, with_calibrator=True)
+
+    artifact = load_model_artifact(s3_client, BUCKET, MODEL_NAME, MODEL_ID)
+
+    assert artifact.growth_calibrator_weight == 0.5
+    assert artifact.growth_calibrator_base_rate == 0.3
+    assert artifact.inflation_calibrator_weight == 0.5
+    assert artifact.inflation_calibrator_base_rate == 0.7
 
 
 def test_load_model_artifact_reconstructs_feature_config(s3_client: S3Client) -> None:

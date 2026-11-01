@@ -114,13 +114,20 @@ def _feature_config() -> FeatureConfig:
     return FeatureConfig(version="test", features=(growth, inflation))
 
 
-def _put_npz(s3: S3Client, key: str, **arrays: np.ndarray) -> None:
+def _put_npz(s3: S3Client, key: str, **arrays: np.ndarray | np.float64) -> None:
     buffer = io.BytesIO()
     np.savez(buffer, **arrays)  # type: ignore[arg-type]
     s3.put_object(Bucket=BUCKET, Key=key, Body=buffer.getvalue())
 
 
-def _publish_fake_model(s3: S3Client) -> None:
+def _publish_fake_model(
+    s3: S3Client,
+    *,
+    growth_calibrator_weight: float = 1.0,
+    growth_calibrator_base_rate: float = 0.0,
+    inflation_calibrator_weight: float = 1.0,
+    inflation_calibrator_base_rate: float = 0.0,
+) -> None:
     prefix = f"models/{MODEL_NAME}/{MODEL_ID}"
     _put_npz(
         s3,
@@ -147,6 +154,10 @@ def _publish_fake_model(s3: S3Client) -> None:
         growth_scale=np.array([1.0]),
         inflation_mean=np.array([0.0]),
         inflation_scale=np.array([1.0]),
+        growth_calibrator_weight=np.float64(growth_calibrator_weight),
+        growth_calibrator_base_rate=np.float64(growth_calibrator_base_rate),
+        inflation_calibrator_weight=np.float64(inflation_calibrator_weight),
+        inflation_calibrator_base_rate=np.float64(inflation_calibrator_base_rate),
     )
     s3.put_object(
         Bucket=BUCKET,
@@ -209,10 +220,20 @@ INFLATION_MONTHLY_VALUES = [-2.0, 2.0, 0.0, 1.0]
 # 2=Jan, 3=Feb.
 
 
-def _setup_monthly_fixture(s3: S3Client, dynamodb: DynamoDBClient) -> None:
+def _setup_monthly_fixture(
+    s3: S3Client,
+    dynamodb: DynamoDBClient,
+    *,
+    growth_calibrator_weight: float = 1.0,
+    growth_calibrator_base_rate: float = 0.0,
+) -> None:
     _write_lake_series(s3, "GROWTH_SERIES", MONTHLY_TEST_DATES, GROWTH_MONTHLY_VALUES)
     _write_lake_series(s3, "INFLATION_SERIES", MONTHLY_TEST_DATES, INFLATION_MONTHLY_VALUES)
-    _publish_fake_model(s3)
+    _publish_fake_model(
+        s3,
+        growth_calibrator_weight=growth_calibrator_weight,
+        growth_calibrator_base_rate=growth_calibrator_base_rate,
+    )
     _publish_and_promote(dynamodb)
 
 
@@ -265,6 +286,43 @@ def test_run_prediction_month_end_day_equals_monthly_filtered_posterior(
         )
         assert result.history.loc[month_end, "p_inflation_up"] == pytest.approx(
             expected_inflation[month_idx, 1], abs=1e-8
+        )
+
+
+def test_run_prediction_applies_posterior_calibration(
+    aws: tuple[S3Client, DynamoDBClient],
+) -> None:
+    """v4 posterior calibration: with a non-identity `growth_calibrator_weight`/
+    `_base_rate` in the published artifact, `p_growth_up` must equal
+    `weight * raw_p_up + (1 - weight) * base_rate` — the raw filtered posterior
+    transformed by exactly the formula in `training/calibration.LinearShrinkCalibrator`,
+    inlined in `prediction/predict.py::_axis_posteriors` (see its comment on why
+    it's inlined rather than imported)."""
+    s3, dynamodb = aws
+    weight, base_rate = 0.5, 0.3
+    _setup_monthly_fixture(
+        s3, dynamodb, growth_calibrator_weight=weight, growth_calibrator_base_rate=base_rate
+    )
+
+    result = _run_monthly_fixture_prediction(s3, dynamodb)
+
+    expected_growth_raw = filtered_posterior(
+        np.array(GROWTH_MONTHLY_VALUES).reshape(-1, 1),
+        START_PROB,
+        TRANSITION_MATRIX,
+        GROWTH_MEANS,
+        VARIANCES,
+    )
+
+    for month_end, month_idx in (
+        (pd.Timestamp("2023-12-31"), 1),
+        (pd.Timestamp("2024-01-31"), 2),
+        (pd.Timestamp("2024-02-29"), 3),
+    ):
+        raw = expected_growth_raw[month_idx, 1]
+        expected_calibrated = weight * raw + (1 - weight) * base_rate
+        assert result.history.loc[month_end, "p_growth_up"] == pytest.approx(
+            expected_calibrated, abs=1e-8
         )
 
 
