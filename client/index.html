@@ -370,6 +370,50 @@
       .cycle-labels > div small { display: none; }
     }
 
+    .hist-chart { margin-top: 6px; }
+    .hist-chart svg { display: block; width: 100%; height: auto; }
+    .hist-chart .h-grid { stroke: rgba(255, 255, 255, 0.07); stroke-dasharray: 3 5; }
+    .hist-chart rect.h-col { transition: opacity 0.15s ease; }
+    .hist-chart svg:hover rect.h-col { opacity: 0.55; }
+    .hist-chart svg rect.h-col:hover { opacity: 1; }
+    .hist-axis {
+      display: flex;
+      justify-content: space-between;
+      font-family: "JetBrains Mono", ui-monospace, monospace;
+      font-size: 0.62rem;
+      color: #64748b;
+      margin-top: 6px;
+    }
+    .hist-legend {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px 16px;
+      margin-top: 14px;
+      font-size: 0.72rem;
+      color: #94a3b8;
+    }
+    .hist-legend i {
+      display: inline-block;
+      width: 9px;
+      height: 9px;
+      border-radius: 2px;
+      margin-right: 6px;
+    }
+    .hist-summary {
+      font-family: "JetBrains Mono", ui-monospace, monospace;
+      font-size: 0.7rem;
+      color: #94a3b8;
+      margin-top: 12px;
+    }
+    .hist-empty {
+      padding: 26px 12px;
+      text-align: center;
+      font-size: 0.82rem;
+      color: #64748b;
+      border: 1px dashed rgba(255, 255, 255, 0.1);
+      border-radius: 10px;
+    }
+
     .axis-bars { margin-bottom: 8px; }
     .axis-bar { margin-bottom: 18px; }
     .axis-bar:last-child { margin-bottom: 0; }
@@ -760,6 +804,19 @@
       </details>
     </div>
   </div>
+  <div class="card fly-in-hidden" id="history-card" data-reveal style="display:none">
+    <div class="eyebrow">
+      <span class="eyebrow-index font-mono">03</span>
+      <span class="eyebrow-rule"></span>
+    </div>
+    <h2>Regime History</h2>
+    <p class="subtitle">
+      Daily regime probabilities over the past 365 days, as computed in the latest batch
+      run. Each column is one day, split by how likely each quadrant was. This is a new
+      project, so the history is still building up.
+    </p>
+    <div id="history-body"></div>
+  </div>
 </main>
 
 <footer>
@@ -940,6 +997,8 @@
     document.getElementById("stale-banner").style.display = "none";
     document.getElementById("warnings-list").style.display = "none";
     document.getElementById("diagnostics-card").style.display = "none";
+    document.getElementById("history-card").style.display = "none";
+    historyRequestId++;
   }
 
   function showError(message) {
@@ -978,6 +1037,106 @@
     return availableModelNames[0];
   }
 
+  // ---- Section 03: past-365-day history -------------------------------------
+  const HISTORY_DAYS = 365;
+  // Stacked bottom → top in business-cycle order, matching the graphic above.
+  const HISTORY_SERIES = [
+    { key: "GROWTH_UP_INFLATION_DOWN", label: "Disinflationary growth", color: "#3fd1b0" },
+    { key: "GROWTH_UP_INFLATION_UP", label: "Reflation", color: "#e7c47e" },
+    { key: "GROWTH_DOWN_INFLATION_UP", label: "Stagflation", color: "#e0796b" },
+    { key: "GROWTH_DOWN_INFLATION_DOWN", label: "Deflation", color: "#5b8ff0" },
+  ];
+  let historyRequestId = 0;
+
+  function isoDate(d) {
+    return d.toISOString().slice(0, 10);
+  }
+
+  function dayNumber(iso) {
+    return Math.round(Date.UTC(...iso.split("-").map((n, i) => (i === 1 ? n - 1 : +n))) / 86400000);
+  }
+
+  function renderHistory(records, windowStartIso, windowEndIso) {
+    const body = document.getElementById("history-body");
+    if (!records || records.length === 0) {
+      body.innerHTML = `<div class="hist-empty">No history is available yet for this model — readings will appear after the next scheduled runs.</div>`;
+      return;
+    }
+
+    const W = 730, H = 200;
+    const startDay = dayNumber(windowStartIso);
+    const spanDays = dayNumber(windowEndIso) - startDay + 1;
+    // Few points → wide, readable columns; a full year → one thin column per day.
+    const colW = records.length <= 90 ? 8 : (W / spanDays) * 0.9;
+
+    let rects = "";
+    for (const rec of records) {
+      const cx = ((dayNumber(rec.date) - startDay + 0.5) / spanDays) * W;
+      const x = Math.min(Math.max(cx - colW / 2, 0), W - colW);
+      const title = [
+        rec.date,
+        "",
+        ...HISTORY_SERIES.map((x) => `${x.label}: ${pct(rec.quadrants[x.key] || 0)}`),
+        "",
+        `Regime: ${QUADRANT_LABELS[rec.regime] || rec.regime}`,
+      ].join("\n");
+      let yCursor = H;
+      for (const series of HISTORY_SERIES) {
+        const h = (rec.quadrants[series.key] || 0) * H;
+        yCursor -= h;
+        rects += `<rect class="h-col" x="${x.toFixed(2)}" y="${yCursor.toFixed(2)}" width="${colW.toFixed(2)}" height="${h.toFixed(2)}" fill="${series.color}" fill-opacity="0.85"><title>${escapeHtml(title)}</title></rect>`;
+      }
+    }
+
+    const grid = [0, 0.25, 0.5, 0.75, 1]
+      .map((f) => `<line class="h-grid" x1="0" x2="${W}" y1="${(H * f).toFixed(1)}" y2="${(H * f).toFixed(1)}"/>`)
+      .join("");
+    const legend = HISTORY_SERIES.slice().reverse()
+      .map((x) => `<span><i style="background:${x.color}"></i>${x.label}</span>`)
+      .join("");
+    const first = records[0].date;
+    const last = records[records.length - 1].date;
+
+    body.innerHTML = `
+      <div class="hist-chart">
+        <svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Stacked daily quadrant probabilities over the past 365 days">${grid}${rects}</svg>
+        <div class="hist-axis"><span>${windowStartIso}</span><span>${windowEndIso}</span></div>
+      </div>
+      <div class="hist-legend">${legend}</div>
+      <div class="hist-summary">${records.length} reading${records.length === 1 ? "" : "s"} · ${first}${first === last ? "" : ` → ${last}`}</div>`;
+  }
+
+  async function loadHistory(modelName) {
+    const requestId = ++historyRequestId;
+    const card = document.getElementById("history-card");
+    const end = new Date();
+    const start = new Date(end.getTime() - (HISTORY_DAYS - 1) * 86400000);
+    const startIso = isoDate(start), endIso = isoDate(end);
+    try {
+      const resp = await fetch(
+        `${API_BASE}/v1/models/${encodeURIComponent(modelName)}/predictions/history` +
+        `?start=${startIso}&end=${endIso}`
+      );
+      if (requestId !== historyRequestId) return;
+      if (resp.status === 404) {
+        card.style.display = "block";
+        renderHistory([], startIso, endIso);
+        return;
+      }
+      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+      const data = await resp.json();
+      if (requestId !== historyRequestId) return;
+      const records = (data.history || []).slice().sort((a, b) => a.date.localeCompare(b.date));
+      card.style.display = "block";
+      renderHistory(records, startIso, endIso);
+    } catch (err) {
+      if (requestId !== historyRequestId) return;
+      card.style.display = "block";
+      document.getElementById("history-body").innerHTML =
+        `<div class="hist-empty">Couldn't load history: ${escapeHtml(err.message)}</div>`;
+    }
+  }
+
   async function loadLatest(modelName) {
     showLoading();
     try {
@@ -988,6 +1147,7 @@
       }
       const data = await resp.json();
       render(data);
+      loadHistory(modelName);
     } catch (err) {
       showError(`Failed to load the latest regime: ${err.message}`);
     }
