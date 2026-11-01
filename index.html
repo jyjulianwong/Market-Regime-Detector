@@ -1,0 +1,1218 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Market Regime Detector</title>
+  <link rel="icon" href="favicon.ico" sizes="32x32">
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="apple-touch-icon.png">
+  <link rel="manifest" href="site.webmanifest">
+  <meta name="theme-color" content="#060913">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&family=Playfair+Display:ital,wght@0,400;0,500;0,600;0,700;1,400;1,500;1,600&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: "Inter", sans-serif;
+      background: #060913;
+      color: #e2e8f0;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .aurora {
+      position: fixed;
+      inset: 0;
+      z-index: -1;
+      overflow: hidden;
+      background: radial-gradient(ellipse 120% 80% at 50% -10%, #111c38 0%, #060913 62%);
+    }
+    .aurora::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background-image:
+        linear-gradient(rgba(255, 255, 255, 0.035) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255, 255, 255, 0.035) 1px, transparent 1px);
+      background-size: 64px 64px;
+      -webkit-mask-image: radial-gradient(ellipse 70% 55% at 50% 15%, #000 0%, transparent 75%);
+      mask-image: radial-gradient(ellipse 70% 55% at 50% 15%, #000 0%, transparent 75%);
+    }
+    .orb {
+      position: absolute;
+      border-radius: 9999px;
+      filter: blur(100px);
+      opacity: 0.32;
+      will-change: transform;
+      animation: drift 30s ease-in-out infinite alternate;
+    }
+    .orb-gold { width: 32rem; height: 32rem; top: -8rem; left: -6rem; background: #e7c47e; }
+    .orb-mint { width: 28rem; height: 28rem; top: 10rem; right: -8rem; background: #1f9e88; animation-delay: -8s; }
+    .orb-blue { width: 30rem; height: 30rem; bottom: -12rem; left: 20%; background: #2b6cb0; animation-delay: -16s; }
+
+    @keyframes drift {
+      from { transform: translate3d(0, 0, 0) scale(1); }
+      to   { transform: translate3d(60px, 40px, 0) scale(1.15); }
+    }
+
+    .font-serif { font-family: "Playfair Display", serif; font-variant-numeric: lining-nums; }
+    .font-mono { font-family: "JetBrains Mono", ui-monospace, monospace; }
+
+    header {
+      position: sticky;
+      top: 0;
+      z-index: 50;
+      background: rgba(6, 9, 19, 0.72);
+      border-bottom: 1px solid rgba(255, 255, 255, 0.09);
+      backdrop-filter: blur(20px) saturate(150%);
+      color: #fff;
+      padding: 18px 32px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    header h1 {
+      font-family: "Playfair Display", serif;
+      font-variant-numeric: lining-nums;
+      font-size: 1.3rem;
+      font-weight: 600;
+      letter-spacing: 0.01em;
+      background: linear-gradient(180deg, #ffffff 30%, #a9b4c9 100%);
+      -webkit-background-clip: text;
+      background-clip: text;
+      color: transparent;
+    }
+    header h1 .accent {
+      background: linear-gradient(120deg, #f3ddae 0%, #e7c47e 45%, #b98a3e 100%);
+      -webkit-background-clip: text;
+      background-clip: text;
+      color: transparent;
+    }
+    .model-picker {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-left: auto;
+    }
+    .model-picker-label {
+      font-family: "JetBrains Mono", ui-monospace, monospace;
+      font-size: 0.68rem;
+      font-weight: 500;
+      color: #64748b;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      white-space: nowrap;
+    }
+    #model-select {
+      font-family: "JetBrains Mono", ui-monospace, monospace;
+      font-size: 0.78rem;
+      color: #e2e8f0;
+      background: rgba(255,255,255,0.05);
+      border: 1px solid rgba(255,255,255,0.14);
+      border-radius: 9999px;
+      padding: 6px 12px;
+      cursor: pointer;
+      transition: border-color 0.2s ease, color 0.2s ease;
+    }
+    #model-select:hover,
+    #model-select:focus-visible {
+      border-color: rgba(231, 196, 126, 0.38);
+      color: #f3ddae;
+    }
+    #model-select option {
+      color: #0a0f1f;
+    }
+    #model-select:disabled {
+      opacity: 0.6;
+      cursor: default;
+    }
+
+    main {
+      flex: 1;
+      max-width: 720px;
+      width: 100%;
+      margin: 56px auto;
+      padding: 0 24px;
+    }
+
+    .card {
+      position: relative;
+      background: linear-gradient(145deg, rgba(255, 255, 255, 0.075), rgba(255, 255, 255, 0.022));
+      border: 1px solid rgba(255, 255, 255, 0.09);
+      backdrop-filter: blur(20px) saturate(150%);
+      box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.07),
+        0 24px 48px -28px rgba(0, 0, 0, 0.7);
+      border-radius: 1rem;
+      padding: 32px;
+      transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1), border-color 0.3s ease;
+    }
+    .card::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      border-radius: inherit;
+      pointer-events: none;
+      opacity: 0;
+      transition: opacity 0.3s ease;
+      background: radial-gradient(360px circle at var(--mx, 50%) var(--my, 50%), rgba(231, 196, 126, 0.15), transparent 60%);
+    }
+    .card:hover::before,
+    .card:focus-within::before { opacity: 1; }
+    .card + .card { margin-top: 24px; }
+
+    .eyebrow {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin-bottom: 14px;
+    }
+    .eyebrow-index {
+      font-family: "JetBrains Mono", ui-monospace, monospace;
+      font-size: 0.72rem;
+      letter-spacing: 0.25em;
+      color: #e7c47e;
+    }
+    .eyebrow-rule {
+      flex: 1 1 60px;
+      min-width: 24px;
+      height: 1px;
+      background: linear-gradient(90deg, rgba(231, 196, 126, 0.65), transparent);
+    }
+
+    .card h2 {
+      font-family: "Playfair Display", serif;
+      font-variant-numeric: lining-nums;
+      font-size: 1.35rem;
+      font-weight: 600;
+      margin-bottom: 8px;
+      color: #f8fafc;
+    }
+    .card p.subtitle { font-size: 0.88rem; color: #94a3b8; margin-bottom: 24px; line-height: 1.6; }
+
+    #loading { color: #94a3b8; font-size: 0.9rem; }
+    #error {
+      display: none;
+      color: #fca5a5;
+      font-size: 0.88rem;
+      background: rgba(248, 113, 113, 0.08);
+      border: 1px solid rgba(248, 113, 113, 0.32);
+      border-radius: 10px;
+      padding: 12px 14px;
+    }
+
+    #content { display: none; }
+
+    .stale-banner {
+      display: none;
+      background: rgba(231, 196, 126, 0.1);
+      border: 1px solid rgba(231, 196, 126, 0.35);
+      color: #f3ddae;
+      border-radius: 10px;
+      padding: 10px 14px;
+      font-size: 0.85rem;
+      margin-bottom: 20px;
+    }
+
+    .regime-headline { text-align: center; margin-bottom: 28px; }
+    .regime-headline .label {
+      font-family: "Playfair Display", serif;
+      font-variant-numeric: lining-nums;
+      font-size: 1.8rem;
+      font-weight: 700;
+      background: linear-gradient(180deg, #ffffff 30%, #a9b4c9 100%);
+      -webkit-background-clip: text;
+      background-clip: text;
+      color: transparent;
+    }
+    .regime-headline .raw {
+      font-size: 0.78rem;
+      color: #64748b;
+      font-family: "JetBrains Mono", ui-monospace, monospace;
+      margin-top: 4px;
+    }
+    .regime-headline .confidence {
+      margin-top: 10px;
+      font-size: 0.95rem;
+      color: #cbd5e1;
+    }
+    .regime-headline .confidence b { font-family: "JetBrains Mono", ui-monospace, monospace; color: #e7c47e; }
+
+    .quadrant-grid {
+      display: grid;
+      grid-template-columns: auto 1fr 1fr;
+      grid-template-rows: auto 1fr 1fr;
+      gap: 6px;
+      margin-bottom: 28px;
+    }
+    .q-axis-label {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-family: "JetBrains Mono", ui-monospace, monospace;
+      font-size: 0.68rem;
+      font-weight: 500;
+      color: #64748b;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
+    .q-axis-label.inflation-up,
+    .q-axis-label.inflation-down {
+      writing-mode: vertical-rl;
+      transform: rotate(180deg);
+    }
+    .q-cell {
+      border-radius: 10px;
+      padding: 16px 10px;
+      text-align: center;
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      transition: background 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+    }
+    .q-cell .q-name {
+      font-size: 0.76rem;
+      font-weight: 500;
+      color: #94a3b8;
+      margin-bottom: 6px;
+    }
+    .q-cell .q-subtitle {
+      font-size: 0.62rem;
+      font-weight: 400;
+      color: #64748b;
+      line-height: 1.3;
+      margin-bottom: 8px;
+    }
+    .q-cell .q-pct {
+      font-family: "JetBrains Mono", ui-monospace, monospace;
+      font-size: 1.25rem;
+      font-weight: 600;
+      color: #e2e8f0;
+    }
+    .q-cell.active {
+      background: rgba(231, 196, 126, 0.12);
+      border-color: rgba(231, 196, 126, 0.5);
+      box-shadow: 0 0 24px -6px rgba(231, 196, 126, 0.55);
+    }
+    .q-cell.active .q-name { color: #f3ddae; }
+    .q-cell.active .q-subtitle { color: #c9ab76; }
+    .q-cell.active .q-pct { color: #f3ddae; }
+
+    .cycle { margin: 22px 0 26px; }
+    .cycle-title {
+      font-family: "JetBrains Mono", ui-monospace, monospace;
+      font-size: 0.62rem;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: #64748b;
+      margin-bottom: 4px;
+    }
+    .cycle-note {
+      font-size: 0.72rem;
+      line-height: 1.45;
+      color: #64748b;
+      margin-bottom: 10px;
+    }
+    .cycle svg { display: block; width: 100%; height: auto; overflow: visible; }
+    .cycle .cy-grid { stroke: rgba(255, 255, 255, 0.06); stroke-dasharray: 3 5; }
+    .cycle .cy-divider { stroke: rgba(255, 255, 255, 0.09); stroke-dasharray: 2 4; }
+    .cycle .cy-area { fill: rgba(255, 255, 255, 0.025); transition: fill 0.4s ease; }
+    .cycle .cy-line {
+      fill: none;
+      stroke: rgba(148, 163, 184, 0.4);
+      stroke-width: 2.5;
+      stroke-linecap: round;
+      transition: stroke 0.4s ease;
+    }
+    .cycle .cy-dot {
+      fill: #060913;
+      stroke: rgba(148, 163, 184, 0.45);
+      stroke-width: 2;
+      transition: all 0.4s ease;
+    }
+    .cycle .cy-seg.active .cy-area { fill: url(#cy-glow); }
+    .cycle .cy-seg.active .cy-line {
+      stroke: #e7c47e;
+      stroke-width: 3.5;
+      filter: drop-shadow(0 0 6px rgba(231, 196, 126, 0.7));
+    }
+    .cycle .cy-seg.active .cy-dot {
+      fill: #e7c47e;
+      stroke: #fff4d6;
+      filter: drop-shadow(0 0 8px rgba(231, 196, 126, 0.9));
+    }
+    .cycle-labels { display: grid; grid-template-columns: repeat(4, 1fr); margin-top: 8px; }
+    .cycle-labels > div {
+      text-align: center;
+      padding: 0 4px;
+      font-size: 0.68rem;
+      font-weight: 500;
+      color: #64748b;
+      line-height: 1.3;
+      transition: color 0.4s ease;
+    }
+    .cycle-labels > div small {
+      display: block;
+      font-family: "JetBrains Mono", ui-monospace, monospace;
+      font-size: 0.56rem;
+      font-weight: 400;
+      letter-spacing: 0.03em;
+      margin-top: 2px;
+      opacity: 0.8;
+    }
+    .cycle-labels > div.active { color: #f3ddae; }
+    @media (max-width: 520px) {
+      .cycle-labels > div { font-size: 0.6rem; padding: 0 1px; }
+      .cycle-labels > div small { display: none; }
+    }
+
+    .hist-chart { margin-top: 6px; }
+    .hist-chart svg { display: block; width: 100%; height: auto; }
+    .hist-chart .h-grid { stroke: rgba(255, 255, 255, 0.07); stroke-dasharray: 3 5; }
+    .hist-chart rect.h-col { transition: opacity 0.15s ease; }
+    .hist-chart svg:hover rect.h-col { opacity: 0.55; }
+    .hist-chart svg rect.h-col:hover { opacity: 1; }
+    .hist-axis {
+      display: flex;
+      justify-content: space-between;
+      font-family: "JetBrains Mono", ui-monospace, monospace;
+      font-size: 0.62rem;
+      color: #64748b;
+      margin-top: 6px;
+    }
+    .hist-legend {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px 16px;
+      margin-top: 14px;
+      font-size: 0.72rem;
+      color: #94a3b8;
+    }
+    .hist-legend i {
+      display: inline-block;
+      width: 9px;
+      height: 9px;
+      border-radius: 2px;
+      margin-right: 6px;
+    }
+    .hist-summary {
+      font-family: "JetBrains Mono", ui-monospace, monospace;
+      font-size: 0.7rem;
+      color: #94a3b8;
+      margin-top: 12px;
+    }
+    .hist-empty {
+      padding: 26px 12px;
+      text-align: center;
+      font-size: 0.82rem;
+      color: #64748b;
+      border: 1px dashed rgba(255, 255, 255, 0.1);
+      border-radius: 10px;
+    }
+
+    .axis-bars { margin-bottom: 8px; }
+    .axis-bar { margin-bottom: 18px; }
+    .axis-bar:last-child { margin-bottom: 0; }
+    .axis-bar .axis-row {
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.85rem;
+      color: #cbd5e1;
+      margin-bottom: 6px;
+    }
+    .axis-bar .axis-row b { font-family: "JetBrains Mono", ui-monospace, monospace; color: #e2e8f0; }
+    .axis-bar .track {
+      height: 8px;
+      background: rgba(255, 255, 255, 0.06);
+      border-radius: 4px;
+      overflow: hidden;
+    }
+    .axis-bar .fill {
+      height: 100%;
+      border-radius: 4px;
+      transition: width 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+    #p-growth-up-fill {
+      background: linear-gradient(90deg, #a8803c, #e7c47e);
+      box-shadow: 0 0 12px -2px rgba(231, 196, 126, 0.6);
+    }
+    #p-inflation-up-fill {
+      background: linear-gradient(90deg, #1f9e88, #5ce1c6);
+      box-shadow: 0 0 12px -2px rgba(92, 225, 198, 0.6);
+    }
+
+    .meta-table {
+      font-size: 0.85rem;
+      color: #94a3b8;
+      border-top: 1px solid rgba(255, 255, 255, 0.08);
+      padding-top: 16px;
+      margin-top: 24px;
+    }
+    .meta-table .row {
+      display: flex;
+      justify-content: space-between;
+      padding: 4px 0;
+    }
+    .meta-table .row span:first-child { color: #64748b; }
+    .meta-table .row span:last-child {
+      font-family: "JetBrains Mono", ui-monospace, monospace;
+      font-size: 0.8rem;
+      text-align: right;
+      color: #cbd5e1;
+    }
+
+    .warnings {
+      margin-top: 8px;
+      font-size: 0.82rem;
+      color: #f3ddae;
+    }
+    .warnings li { margin-left: 18px; margin-top: 2px; }
+
+    .disclaimer {
+      margin-top: 24px;
+      font-size: 0.78rem;
+      color: #64748b;
+      text-align: center;
+    }
+
+    .diag-section { margin-top: 28px; }
+    .diag-section:first-child { margin-top: 0; }
+    .diag-heading {
+      font-family: "JetBrains Mono", ui-monospace, monospace;
+      font-size: 0.68rem;
+      font-weight: 500;
+      color: #64748b;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      margin-bottom: 10px;
+    }
+    .diag-table-wrap {
+      overflow-x: auto;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 10px;
+    }
+    table.diag-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.78rem;
+    }
+    table.diag-table th,
+    table.diag-table td {
+      padding: 8px 10px;
+      text-align: left;
+      white-space: nowrap;
+    }
+    table.diag-table th {
+      font-family: "JetBrains Mono", ui-monospace, monospace;
+      font-size: 0.62rem;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: #64748b;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    }
+    table.diag-table td {
+      color: #cbd5e1;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+    }
+    table.diag-table td.diag-desc {
+      color: #94a3b8;
+      white-space: normal;
+      min-width: 220px;
+    }
+    table.diag-table th:nth-child(n+3),
+    table.diag-table td.diag-value,
+    table.diag-table td.diag-date,
+    table.diag-table td.diag-lag {
+      text-align: right;
+    }
+    table.diag-table td.diag-value,
+    table.diag-table td.diag-date,
+    table.diag-table td.diag-lag {
+      font-family: "JetBrains Mono", ui-monospace, monospace;
+    }
+    table.diag-table tr:last-child td { border-bottom: none; }
+    table.diag-table tr.diag-stale td.diag-lag { color: #f3ddae; }
+
+    details.diag-details summary {
+      cursor: pointer;
+      font-family: "JetBrains Mono", ui-monospace, monospace;
+      font-size: 0.72rem;
+      color: #94a3b8;
+      padding: 4px 0;
+      list-style: none;
+      transition: color 0.2s ease;
+    }
+    details.diag-details summary::-webkit-details-marker { display: none; }
+    details.diag-details summary::before { content: "▸ "; color: #e7c47e; }
+    details.diag-details[open] summary::before { content: "▾ "; }
+    details.diag-details summary:hover { color: #f3ddae; }
+
+    .diag-empty {
+      font-size: 0.82rem;
+      color: #64748b;
+      padding: 14px;
+    }
+
+    footer {
+      position: relative;
+      text-align: center;
+      font-family: "Playfair Display", serif;
+      font-variant-numeric: lining-nums;
+      font-size: 0.78rem;
+      color: #64748b;
+      padding: 32px 24px 24px;
+    }
+    footer::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 50%;
+      transform: translateX(-50%);
+      width: min(480px, 80%);
+      height: 1px;
+      background: linear-gradient(90deg, transparent, rgba(255,255,255,0.15), transparent);
+    }
+    footer a { color: #94a3b8; text-decoration: none; transition: color 0.2s ease; }
+    footer a:hover { color: #f3ddae; }
+
+    a:focus-visible,
+    button:focus-visible,
+    select:focus-visible {
+      outline: 2px solid #e7c47e;
+      outline-offset: 3px;
+      border-radius: 0.5rem;
+    }
+
+    ::selection {
+      background-color: rgba(231, 196, 126, 0.2);
+      color: #f3ddae;
+    }
+
+    .fly-in-hidden {
+      opacity: 0;
+      transform: translateY(28px) scale(0.98);
+    }
+    .animate-fly-in {
+      animation: fly-in 0.8s cubic-bezier(0.16, 1, 0.3, 1) both;
+    }
+    @keyframes fly-in {
+      from { opacity: 0; transform: translateY(28px) scale(0.98); }
+      to   { opacity: 1; transform: translateY(0) scale(1); }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      html { scroll-behavior: auto; }
+      .orb, .animate-fly-in { animation: none; }
+      .fly-in-hidden { opacity: 1; transform: none; }
+      .card { transition: none; }
+    }
+  </style>
+</head>
+<body>
+
+<div class="aurora" aria-hidden="true">
+  <div class="orb orb-gold"></div>
+  <div class="orb orb-mint"></div>
+  <div class="orb orb-blue"></div>
+</div>
+
+<header>
+  <h1>Market <span class="accent">Regime</span> Detector</h1>
+</header>
+
+<main>
+  <div class="card fly-in-hidden" data-reveal>
+    <div class="eyebrow">
+      <span class="eyebrow-index font-mono">01</span>
+      <span class="eyebrow-rule"></span>
+      <div class="model-picker">
+        <label for="model-select" class="model-picker-label">Model</label>
+        <select id="model-select" disabled></select>
+      </div>
+    </div>
+    <h2>Current Macro Regime</h2>
+    <p class="subtitle">
+      A causal, point-in-time nowcast of the Bridgewater All Weather growth/inflation
+      quadrant, from two independent 2-state Gaussian HMMs run against FRED, ALFRED,
+      and market data.
+    </p>
+
+    <div id="loading">Loading latest regime…</div>
+    <div id="error"></div>
+
+    <div id="content">
+      <div class="stale-banner" id="stale-banner">
+        <div id="stale-banner-text"></div>
+        <ul class="warnings" id="warnings-list" style="display:none"></ul>
+      </div>
+
+      <div class="regime-headline">
+        <div class="label" id="regime-label">—</div>
+        <div class="raw" id="regime-raw">—</div>
+        <div class="confidence">Probability: <b id="regime-confidence">—</b></div>
+      </div>
+
+      <div class="quadrant-grid">
+        <div></div>
+        <div class="q-axis-label">Growth ↑</div>
+        <div class="q-axis-label">Growth ↓</div>
+
+        <div class="q-axis-label inflation-up">Inflation ↑</div>
+        <div class="q-cell" id="q-GROWTH_UP_INFLATION_UP">
+          <div class="q-name">Reflation</div>
+          <div class="q-subtitle">above-trend growth, accelerating inflation</div>
+          <div class="q-pct">—</div>
+        </div>
+        <div class="q-cell" id="q-GROWTH_DOWN_INFLATION_UP">
+          <div class="q-name">Stagflation</div>
+          <div class="q-subtitle">below-trend growth, accelerating inflation</div>
+          <div class="q-pct">—</div>
+        </div>
+
+        <div class="q-axis-label inflation-down">Inflation ↓</div>
+        <div class="q-cell" id="q-GROWTH_UP_INFLATION_DOWN">
+          <div class="q-name">Disinflationary growth</div>
+          <div class="q-subtitle">above-trend growth, decelerating inflation</div>
+          <div class="q-pct">—</div>
+        </div>
+        <div class="q-cell" id="q-GROWTH_DOWN_INFLATION_DOWN">
+          <div class="q-name">Deflation</div>
+          <div class="q-subtitle">below-trend growth, decelerating inflation</div>
+          <div class="q-pct">—</div>
+        </div>
+      </div>
+
+      <div class="cycle" id="cycle">
+        <div class="cycle-title">Typical business cycle</div>
+        <p class="cycle-note">
+          Illustrative only: a theoretical, idealised cycle (the wave loosely stands in for
+          stock market prices). Real cycles vary in order, length and shape, so regimes don't
+          always follow this sequence. The highlighted stage is the model's current regime.
+        </p>
+        <svg viewBox="0 0 640 190" role="img" aria-label="Idealised business cycle through the four regimes, with the current regime highlighted">
+          <defs>
+            <linearGradient id="cy-glow" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0" stop-color="#e7c47e" stop-opacity="0.38"/>
+              <stop offset="1" stop-color="#e7c47e" stop-opacity="0"/>
+            </linearGradient>
+            <clipPath id="cy-clip-0"><rect x="0" y="0" width="160" height="190"/></clipPath>
+            <clipPath id="cy-clip-1"><rect x="160" y="0" width="160" height="190"/></clipPath>
+            <clipPath id="cy-clip-2"><rect x="320" y="0" width="160" height="190"/></clipPath>
+            <clipPath id="cy-clip-3"><rect x="480" y="0" width="160" height="190"/></clipPath>
+          </defs>
+          <line class="cy-grid" x1="0" y1="40" x2="640" y2="40"/>
+          <line class="cy-grid" x1="0" y1="100" x2="640" y2="100"/>
+          <line class="cy-grid" x1="0" y1="160" x2="640" y2="160"/>
+          <line class="cy-divider" x1="160" y1="10" x2="160" y2="170"/>
+          <line class="cy-divider" x1="320" y1="10" x2="320" y2="170"/>
+          <line class="cy-divider" x1="480" y1="10" x2="480" y2="170"/>
+          <g class="cy-seg" id="cy-GROWTH_UP_INFLATION_DOWN" clip-path="url(#cy-clip-0)">
+            <path class="cy-area" d="M0,160 C160,160 160,40 320,40 C480,40 480,160 640,160 L640,190 L0,190 Z"/>
+            <path class="cy-line" d="M0,160 C160,160 160,40 320,40 C480,40 480,160 640,160"/>
+          </g>
+          <g class="cy-seg" id="cy-GROWTH_UP_INFLATION_UP" clip-path="url(#cy-clip-1)">
+            <path class="cy-area" d="M0,160 C160,160 160,40 320,40 C480,40 480,160 640,160 L640,190 L0,190 Z"/>
+            <path class="cy-line" d="M0,160 C160,160 160,40 320,40 C480,40 480,160 640,160"/>
+          </g>
+          <g class="cy-seg" id="cy-GROWTH_DOWN_INFLATION_UP" clip-path="url(#cy-clip-2)">
+            <path class="cy-area" d="M0,160 C160,160 160,40 320,40 C480,40 480,160 640,160 L640,190 L0,190 Z"/>
+            <path class="cy-line" d="M0,160 C160,160 160,40 320,40 C480,40 480,160 640,160"/>
+          </g>
+          <g class="cy-seg" id="cy-GROWTH_DOWN_INFLATION_DOWN" clip-path="url(#cy-clip-3)">
+            <path class="cy-area" d="M0,160 C160,160 160,40 320,40 C480,40 480,160 640,160 L640,190 L0,190 Z"/>
+            <path class="cy-line" d="M0,160 C160,160 160,40 320,40 C480,40 480,160 640,160"/>
+          </g>
+          <g class="cy-seg" id="cy-dot-GROWTH_UP_INFLATION_DOWN"><circle class="cy-dot" cx="80" cy="147.3" r="6" vector-effect="non-scaling-stroke"/></g>
+          <g class="cy-seg" id="cy-dot-GROWTH_UP_INFLATION_UP"><circle class="cy-dot" cx="240" cy="52.7" r="6" vector-effect="non-scaling-stroke"/></g>
+          <g class="cy-seg" id="cy-dot-GROWTH_DOWN_INFLATION_UP"><circle class="cy-dot" cx="400" cy="52.7" r="6" vector-effect="non-scaling-stroke"/></g>
+          <g class="cy-seg" id="cy-dot-GROWTH_DOWN_INFLATION_DOWN"><circle class="cy-dot" cx="560" cy="147.3" r="6" vector-effect="non-scaling-stroke"/></g>
+        </svg>
+        <div class="cycle-labels">
+          <div id="cy-label-GROWTH_UP_INFLATION_DOWN">Disinflationary growth<small>growth ↑ · inflation ↓</small></div>
+          <div id="cy-label-GROWTH_UP_INFLATION_UP">Reflation<small>growth ↑ · inflation ↑</small></div>
+          <div id="cy-label-GROWTH_DOWN_INFLATION_UP">Stagflation<small>growth ↓ · inflation ↑</small></div>
+          <div id="cy-label-GROWTH_DOWN_INFLATION_DOWN">Deflation<small>growth ↓ · inflation ↓</small></div>
+        </div>
+      </div>
+
+      <div class="axis-bars">
+        <div class="axis-bar">
+          <div class="axis-row">
+            <span class="font-mono">P(growth="UP")</span>
+            <b id="p-growth-up">—</b>
+          </div>
+          <div class="track"><div class="fill" id="p-growth-up-fill" style="width:0%"></div></div>
+        </div>
+        <div class="axis-bar">
+          <div class="axis-row">
+            <span class="font-mono">P(inflation="UP")</span>
+            <b id="p-inflation-up">—</b>
+          </div>
+          <div class="track"><div class="fill" id="p-inflation-up-fill" style="width:0%"></div></div>
+        </div>
+      </div>
+
+      <div class="meta-table">
+        <div class="row"><span>As of</span><span id="meta-asof">—</span></div>
+        <div class="row"><span>Observation date</span><span id="meta-observation">—</span></div>
+        <div class="row"><span>Generated</span><span id="meta-generated">—</span></div>
+        <div class="row"><span>Model</span><span id="meta-model">—</span></div>
+      </div>
+
+      <p class="disclaimer" id="disclaimer-text"></p>
+    </div>
+  </div>
+
+  <div class="card fly-in-hidden" id="diagnostics-card" data-reveal style="display:none">
+    <div class="eyebrow">
+      <span class="eyebrow-index font-mono">02</span>
+      <span class="eyebrow-rule"></span>
+    </div>
+    <h2>Model Inputs</h2>
+    <p class="subtitle">
+      The exact feature values this model saw for the prediction above, and every
+      raw data stream currently tracked in the data lake.
+    </p>
+
+    <div class="diag-section">
+      <div class="diag-heading">Features used by this model</div>
+      <div class="diag-table-wrap">
+        <table class="diag-table">
+          <thead>
+            <tr><th>Feature</th><th>Description</th><th>Value</th><th>Date</th><th>Lag</th></tr>
+          </thead>
+          <tbody id="features-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="diag-section">
+      <details class="diag-details">
+        <summary id="data-summary">All available data streams</summary>
+        <div class="diag-table-wrap" style="margin-top:10px">
+          <table class="diag-table">
+            <thead>
+              <tr><th>Series</th><th>Description</th><th>Value</th><th>Date</th><th>Lag</th></tr>
+            </thead>
+            <tbody id="data-tbody"></tbody>
+          </table>
+        </div>
+      </details>
+    </div>
+  </div>
+  <div class="card fly-in-hidden" id="history-card" data-reveal style="display:none">
+    <div class="eyebrow">
+      <span class="eyebrow-index font-mono">03</span>
+      <span class="eyebrow-rule"></span>
+    </div>
+    <h2>Regime History</h2>
+    <p class="subtitle">
+      Daily regime probabilities over the past 365 days, as computed in the latest batch
+      run. Each column is one day, split by how likely each quadrant was. This is a new
+      project, so the history is still building up.
+    </p>
+    <div id="history-body"></div>
+  </div>
+</main>
+
+<footer>
+  <a href="https://github.com/jyjulianwong/Market-Regime-Detector" target="_blank" rel="noopener">
+    jyjulianwong/Market-Regime-Detector
+  </a>
+</footer>
+
+<script>
+  // Set by Terraform's server_api_gateway_url output — see terraform/main.tf
+  // (aws_apigatewayv2_api.server). NOT the Lambda Function URL
+  // (server_function_url) — that's blocked by this AWS account's org-level
+  // SCP denying anonymous lambda:InvokeFunctionUrl, which is why this project
+  // fronts the same server Lambda with API Gateway instead. Update manually
+  // after `terraform apply` if this value ever changes.
+  const API_BASE = "https://6nbosjpuc9.execute-api.eu-west-2.amazonaws.com";
+
+  const QUADRANT_LABELS = {
+    GROWTH_UP_INFLATION_UP: "Reflation",
+    GROWTH_DOWN_INFLATION_UP: "Stagflation",
+    GROWTH_UP_INFLATION_DOWN: "Disinflationary growth",
+    GROWTH_DOWN_INFLATION_DOWN: "Deflation",
+  };
+
+  const loadingEl = document.getElementById("loading");
+  const errorEl = document.getElementById("error");
+  const contentEl = document.getElementById("content");
+  const modelSelectEl = document.getElementById("model-select");
+
+  // UI-only: deliberately not part of the API response.
+  const DISCLAIMER_TEXT =
+    "Important information. This website and its reports are provided for general information and educational purposes only. They are generated with the assistance of artificial intelligence and may contain errors, omissions, or out-of-date information. Nothing here is investment, financial, legal, or tax advice, a personal recommendation, or an offer or invitation to buy or sell any investment. The author is not authorised or regulated by the Financial Conduct Authority. Content is not tailored to your circumstances. The value of investments can fall as well as rise, and you may get back less than you invest. Past performance is not a reliable indicator of future results. Do your own research and speak to a suitably qualified, authorised adviser before making investment decisions. Use of this site is at your own risk, and the author accepts no liability for any loss arising from reliance on it.";
+
+  document.getElementById("disclaimer-text").textContent = DISCLAIMER_TEXT;
+
+  const SELECTED_MODEL_STORAGE_KEY = "mrd_selected_model";
+
+  function pct(x) {
+    return (x * 100).toFixed(1) + "%";
+  }
+
+  function formatTimestamp(iso) {
+    const d = new Date(iso);
+    return d.toLocaleString(undefined, {
+      dateStyle: "medium",
+      timeStyle: "short",
+    });
+  }
+
+  function escapeHtml(s) {
+    return String(s)
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;");
+  }
+
+  function formatDiagValue(v) {
+    if (v === null || v === undefined) return "—";
+    const abs = Math.abs(v);
+    // Small/fractional feature values (rates of change, ratios) read better with
+    // more decimal places than a raw price level — a fixed precision either
+    // truncates the former to 0.00 or drags the latter into noisy digits.
+    const decimals = abs !== 0 && abs < 1 ? 4 : 2;
+    return v.toFixed(decimals);
+  }
+
+  function formatDiagLag(lagDays) {
+    return lagDays === null || lagDays === undefined ? "—" : `${lagDays}d`;
+  }
+
+  // Lag beyond this is flagged visually — a loose "probably hasn't updated in
+  // over a month" heuristic, not tied to any one series' real publication
+  // cadence (the API's own `is_stale`/staleness warnings are the authoritative
+  // signal; this is just a visual nudge in the table).
+  const DIAG_STALE_LAG_DAYS = 45;
+
+  function renderDiagTable(tbodyId, points, emptyMessage) {
+    const tbody = document.getElementById(tbodyId);
+    if (!points || points.length === 0) {
+      tbody.innerHTML = `<tr><td colspan="5" class="diag-empty">${escapeHtml(emptyMessage)}</td></tr>`;
+      return;
+    }
+    tbody.innerHTML = points
+      .map((p) => {
+        const stale = typeof p.lag_days === "number" && p.lag_days > DIAG_STALE_LAG_DAYS;
+        return `<tr class="${stale ? "diag-stale" : ""}">
+          <td>${escapeHtml(p.name)}</td>
+          <td class="diag-desc">${escapeHtml(p.description || "—")}</td>
+          <td class="diag-value">${formatDiagValue(p.value)}</td>
+          <td class="diag-date">${p.date ? escapeHtml(p.date) : "—"}</td>
+          <td class="diag-lag">${formatDiagLag(p.lag_days)}</td>
+        </tr>`;
+      })
+      .join("");
+  }
+
+  function renderDiagnostics(latest) {
+    const card = document.getElementById("diagnostics-card");
+    if (!latest) {
+      card.style.display = "none";
+      return;
+    }
+    card.style.display = "block";
+
+    const features = latest.features || [];
+    const lakeData = latest.data || [];
+    const waitingMessage =
+      "Not available for this prediction — will appear once the next scheduled run writes it.";
+
+    renderDiagTable("features-tbody", features, waitingMessage);
+    renderDiagTable("data-tbody", lakeData, waitingMessage);
+    document.getElementById("data-summary").textContent =
+      `All available data streams (${lakeData.length})`;
+  }
+
+  function render(data) {
+    const staleBanner = document.getElementById("stale-banner");
+    const staleText = document.getElementById("stale-banner-text");
+    const hasWarnings = data.warnings && data.warnings.length > 0;
+    staleText.textContent = data.is_stale
+      ? "This result is flagged stale — one or more inputs may be out of date, " +
+        "or the batch job hasn't run recently. Treat with extra caution."
+      : "";
+    if (data.is_stale || hasWarnings) staleBanner.style.display = "block";
+
+    if (!data.latest) {
+      errorEl.style.display = "block";
+      errorEl.textContent = "No regime estimate is available for this model yet.";
+      loadingEl.style.display = "none";
+      document.getElementById("diagnostics-card").style.display = "none";
+      return;
+    }
+
+    const latest = data.latest;
+    const regimeLabel = QUADRANT_LABELS[latest.regime] || latest.regime;
+
+    document.getElementById("regime-label").textContent = regimeLabel;
+    document.getElementById("regime-raw").textContent = latest.regime;
+    document.getElementById("regime-confidence").textContent = pct(latest.confidence);
+
+    document.getElementById("p-growth-up").textContent = pct(latest.p_growth_up);
+    document.getElementById("p-growth-up-fill").style.width = pct(latest.p_growth_up);
+    document.getElementById("p-inflation-up").textContent = pct(latest.p_inflation_up);
+    document.getElementById("p-inflation-up-fill").style.width = pct(latest.p_inflation_up);
+
+    for (const [name, label] of Object.entries(QUADRANT_LABELS)) {
+      const cell = document.getElementById(`q-${name}`);
+      cell.querySelector(".q-pct").textContent = pct(latest.quadrants[name]);
+      cell.classList.toggle("active", name === latest.regime);
+      for (const id of [`cy-${name}`, `cy-dot-${name}`, `cy-label-${name}`]) {
+        document.getElementById(id).classList.toggle("active", name === latest.regime);
+      }
+    }
+
+    const warningsList = document.getElementById("warnings-list");
+    if (hasWarnings) {
+      warningsList.style.display = "block";
+      warningsList.innerHTML = data.warnings.map(w => `<li>${w}</li>`).join("");
+    }
+
+    document.getElementById("meta-asof").textContent = data.asof;
+    document.getElementById("meta-observation").textContent = data.observation_date || "—";
+    document.getElementById("meta-generated").textContent = formatTimestamp(data.generated_at);
+    document.getElementById("meta-model").textContent = data.model_id;
+
+
+    renderDiagnostics(latest);
+
+    loadingEl.style.display = "none";
+    contentEl.style.display = "block";
+  }
+
+  function showLoading() {
+    loadingEl.style.display = "block";
+    loadingEl.textContent = "Loading latest regime…";
+    errorEl.style.display = "none";
+    contentEl.style.display = "none";
+    document.getElementById("stale-banner").style.display = "none";
+    document.getElementById("warnings-list").style.display = "none";
+    document.getElementById("diagnostics-card").style.display = "none";
+    document.getElementById("history-card").style.display = "none";
+    historyRequestId++;
+  }
+
+  function showError(message) {
+    loadingEl.style.display = "none";
+    errorEl.style.display = "block";
+    errorEl.textContent = message;
+  }
+
+  // Keeps the current model selection shareable/bookmarkable via ?model=, and
+  // sticky across visits via localStorage — replaceState (not pushState) since
+  // switching models isn't a "back button" navigation.
+  function persistSelectedModel(modelName) {
+    try {
+      localStorage.setItem(SELECTED_MODEL_STORAGE_KEY, modelName);
+    } catch (_err) {
+      // Private browsing / blocked storage — selection still works for this
+      // session via the URL and in-memory <select>, just doesn't persist.
+    }
+    const url = new URL(window.location.href);
+    url.searchParams.set("model", modelName);
+    window.history.replaceState({}, "", url);
+  }
+
+  function pickInitialModel(availableModelNames) {
+    const fromUrl = new URLSearchParams(window.location.search).get("model");
+    if (fromUrl && availableModelNames.includes(fromUrl)) return fromUrl;
+
+    let fromStorage = null;
+    try {
+      fromStorage = localStorage.getItem(SELECTED_MODEL_STORAGE_KEY);
+    } catch (_err) {
+      // Ignore — storage unavailable, fall through to the default below.
+    }
+    if (fromStorage && availableModelNames.includes(fromStorage)) return fromStorage;
+
+    return availableModelNames[0];
+  }
+
+  // ---- Section 03: past-365-day history -------------------------------------
+  const HISTORY_DAYS = 365;
+  // Stacked bottom → top in business-cycle order, matching the graphic above.
+  const HISTORY_SERIES = [
+    { key: "GROWTH_UP_INFLATION_DOWN", label: "Disinflationary growth", color: "#3fd1b0" },
+    { key: "GROWTH_UP_INFLATION_UP", label: "Reflation", color: "#e7c47e" },
+    { key: "GROWTH_DOWN_INFLATION_UP", label: "Stagflation", color: "#e0796b" },
+    { key: "GROWTH_DOWN_INFLATION_DOWN", label: "Deflation", color: "#5b8ff0" },
+  ];
+  let historyRequestId = 0;
+
+  function isoDate(d) {
+    return d.toISOString().slice(0, 10);
+  }
+
+  function dayNumber(iso) {
+    return Math.round(Date.UTC(...iso.split("-").map((n, i) => (i === 1 ? n - 1 : +n))) / 86400000);
+  }
+
+  function renderHistory(records, windowStartIso, windowEndIso) {
+    const body = document.getElementById("history-body");
+    if (!records || records.length === 0) {
+      body.innerHTML = `<div class="hist-empty">No history is available yet for this model — readings will appear after the next scheduled runs.</div>`;
+      return;
+    }
+
+    const W = 730, H = 200;
+    const startDay = dayNumber(windowStartIso);
+    const spanDays = dayNumber(windowEndIso) - startDay + 1;
+    // Few points → wide, readable columns; a full year → one thin column per day.
+    const colW = records.length <= 90 ? 8 : (W / spanDays) * 0.9;
+
+    let rects = "";
+    for (const rec of records) {
+      const cx = ((dayNumber(rec.date) - startDay + 0.5) / spanDays) * W;
+      const x = Math.min(Math.max(cx - colW / 2, 0), W - colW);
+      const title = [
+        rec.date,
+        "",
+        ...HISTORY_SERIES.map((x) => `${x.label}: ${pct(rec.quadrants[x.key] || 0)}`),
+        "",
+        `Regime: ${QUADRANT_LABELS[rec.regime] || rec.regime}`,
+      ].join("\n");
+      let yCursor = H;
+      for (const series of HISTORY_SERIES) {
+        const h = (rec.quadrants[series.key] || 0) * H;
+        yCursor -= h;
+        rects += `<rect class="h-col" x="${x.toFixed(2)}" y="${yCursor.toFixed(2)}" width="${colW.toFixed(2)}" height="${h.toFixed(2)}" fill="${series.color}" fill-opacity="0.85"><title>${escapeHtml(title)}</title></rect>`;
+      }
+    }
+
+    const grid = [0, 0.25, 0.5, 0.75, 1]
+      .map((f) => `<line class="h-grid" x1="0" x2="${W}" y1="${(H * f).toFixed(1)}" y2="${(H * f).toFixed(1)}"/>`)
+      .join("");
+    const legend = HISTORY_SERIES.slice().reverse()
+      .map((x) => `<span><i style="background:${x.color}"></i>${x.label}</span>`)
+      .join("");
+    const first = records[0].date;
+    const last = records[records.length - 1].date;
+
+    body.innerHTML = `
+      <div class="hist-chart">
+        <svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Stacked daily quadrant probabilities over the past 365 days">${grid}${rects}</svg>
+        <div class="hist-axis"><span>${windowStartIso}</span><span>${windowEndIso}</span></div>
+      </div>
+      <div class="hist-legend">${legend}</div>
+      <div class="hist-summary">${records.length} reading${records.length === 1 ? "" : "s"} · ${first}${first === last ? "" : ` → ${last}`}</div>`;
+  }
+
+  async function loadHistory(modelName) {
+    const requestId = ++historyRequestId;
+    const card = document.getElementById("history-card");
+    const end = new Date();
+    const start = new Date(end.getTime() - (HISTORY_DAYS - 1) * 86400000);
+    const startIso = isoDate(start), endIso = isoDate(end);
+    try {
+      const resp = await fetch(
+        `${API_BASE}/v1/models/${encodeURIComponent(modelName)}/predictions/history` +
+        `?start=${startIso}&end=${endIso}`
+      );
+      if (requestId !== historyRequestId) return;
+      if (resp.status === 404) {
+        card.style.display = "block";
+        renderHistory([], startIso, endIso);
+        return;
+      }
+      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+      const data = await resp.json();
+      if (requestId !== historyRequestId) return;
+      const records = (data.history || []).slice().sort((a, b) => a.date.localeCompare(b.date));
+      card.style.display = "block";
+      renderHistory(records, startIso, endIso);
+    } catch (err) {
+      if (requestId !== historyRequestId) return;
+      card.style.display = "block";
+      document.getElementById("history-body").innerHTML =
+        `<div class="hist-empty">Couldn't load history: ${escapeHtml(err.message)}</div>`;
+    }
+  }
+
+  async function loadLatest(modelName) {
+    showLoading();
+    try {
+      const resp = await fetch(`${API_BASE}/v1/models/${encodeURIComponent(modelName)}/predictions/latest`);
+      if (!resp.ok) {
+        const err = await resp.json().catch(() => ({}));
+        throw new Error(err.detail || `HTTP ${resp.status}`);
+      }
+      const data = await resp.json();
+      render(data);
+      loadHistory(modelName);
+    } catch (err) {
+      showError(`Failed to load the latest regime: ${err.message}`);
+    }
+  }
+
+  async function init() {
+    showLoading();
+    loadingEl.textContent = "Loading available models…";
+    try {
+      const resp = await fetch(`${API_BASE}/v1/models?stage=production`);
+      if (!resp.ok) {
+        const err = await resp.json().catch(() => ({}));
+        throw new Error(err.detail || `HTTP ${resp.status}`);
+      }
+      const items = await resp.json();
+      const modelNames = [...new Set(items.map(item => item.model_name))].sort();
+
+      if (modelNames.length === 0) {
+        showError("No models are currently in production.");
+        return;
+      }
+
+      modelSelectEl.innerHTML = modelNames
+        .map(name => `<option value="${name}">${name}</option>`)
+        .join("");
+      modelSelectEl.disabled = false;
+
+      const initialModel = pickInitialModel(modelNames);
+      modelSelectEl.value = initialModel;
+      persistSelectedModel(initialModel);
+
+      modelSelectEl.addEventListener("change", () => {
+        const selected = modelSelectEl.value;
+        persistSelectedModel(selected);
+        loadLatest(selected);
+      });
+
+      await loadLatest(initialModel);
+    } catch (err) {
+      showError(`Failed to load available models: ${err.message}`);
+    }
+  }
+
+  init();
+
+  // Decorative only — cursor spotlight + scroll-reveal entrance, no effect on data/state.
+  document.querySelectorAll(".card").forEach((el) => {
+    el.addEventListener("pointermove", (e) => {
+      const rect = el.getBoundingClientRect();
+      el.style.setProperty("--mx", `${e.clientX - rect.left}px`);
+      el.style.setProperty("--my", `${e.clientY - rect.top}px`);
+    });
+  });
+
+  document.querySelectorAll("[data-reveal]").forEach((el) => {
+    const io = new IntersectionObserver(([entry]) => {
+      if (entry.isIntersecting) {
+        el.classList.remove("fly-in-hidden");
+        el.classList.add("animate-fly-in");
+        io.disconnect();
+      }
+    }, { threshold: 0.15, rootMargin: "0px 0px -40px 0px" });
+    io.observe(el);
+  });
+</script>
+
+</body>
+</html>
