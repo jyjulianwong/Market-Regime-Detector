@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# (no-op comment: diagnostic push to check whether this repo's push-triggered
+# CI is still firing after the earlier incident, or still suppressed)
 """Bump the calendar version, update the root pyproject.toml, and create a git tag.
 
 Usage (run from repo root in CI):
