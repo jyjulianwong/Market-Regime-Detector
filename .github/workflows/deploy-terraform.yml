@@ -112,11 +112,11 @@ jobs:
       # token: the default GITHUB_TOKEN authenticates as github-actions[bot],
       # which never holds the Admin role branch_ruleset.tf (Infrastructure-GitHub)
       # exempts from its "no direct pushes to main" rule — only an actual
-      # admin-role credential bypasses it, same as that repo's own GH_ADMIN_TOKEN.
+      # admin-role credential bypasses it, same as that repo's own GITHUB_ADMIN_TOKEN.
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-          token: ${{ secrets.GH_ADMIN_TOKEN }}
+          token: ${{ secrets.GITHUB_ADMIN_TOKEN }}
 
       - name: Set up Python
         uses: actions/setup-python@v5
