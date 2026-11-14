@@ -59,7 +59,14 @@ def main() -> None:
     run(["git", "config", "user.name", "github-actions[bot]"])
     run(["git", "config", "user.email", "github-actions[bot]@users.noreply.github.com"])
     run(["git", "add", str(pyproject)])
-    run(["git", "commit", "-m", f"chore: bump version to {version}"])
+    # [skip ci]: GitHub Actions skips starting any workflow run at all for a
+    # push whose HEAD commit message contains this marker — the only
+    # reliable way to stop this commit (which this very push makes) from
+    # re-triggering the same workflow that's about to push it, forever. An
+    # `if:` condition inside the workflow isn't enough on its own: the
+    # version file this script bumps falls inside the workflow's own
+    # path-filtered trigger paths.
+    run(["git", "commit", "-m", f"chore: bump version to {version} [skip ci]"])
     run(["git", "tag", "-a", tag, "-m", tag])
 
     github_output = os.environ.get("GITHUB_OUTPUT")
