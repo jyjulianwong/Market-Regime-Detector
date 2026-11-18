@@ -41,7 +41,7 @@ the registry, promote to "production" (scoped per model_name).
 | 2x EventBridge Rule + shared SQS DLQ | Daily ingest trigger, daily predict trigger, retries, dead-letter queue for failed invocations of either |
 | CloudWatch alarm + SNS | Emails `alert_email` on batch Lambda errors |
 | SSM parameters | `SecureString` copies of the provider API keys (see note below) |
-| GitHub Actions IAM user | Static access key — Terraform apply, ECR push, both Lambdas' code updates |
+| GitHub Actions IAM role (OIDC) | Created by `terraform/bootstrap`, assumed by CI with no static keys — Terraform apply, ECR push, both Lambdas' code updates |
 
 ## Repository layout
 
@@ -54,7 +54,7 @@ the registry, promote to "production" (scoped per model_name).
 ├── docker/
 │   └── batch-lambda.Dockerfile
 ├── terraform/
-│   ├── bootstrap/         # One-time state infrastructure (run manually once)
+│   ├── bootstrap/         # State bucket, lock table and CI OIDC role (scripts/bootstrap.sh)
 │   └── *.tf               # Main infrastructure (deployed via CI/CD after first apply)
 └── .github/workflows/     # deploy-terraform.yml
 ```
@@ -63,8 +63,9 @@ the registry, promote to "production" (scoped per model_name).
 
 ## Prerequisites
 
-- **AWS CLI**, configured (`aws configure`) with credentials for the account you're
-  deploying into.
+- **AWS CLI**, signed in to the account you're deploying into (e.g. `aws sso login`).
+- **GitHub CLI** (`gh`), authenticated — `scripts/bootstrap.sh` sets the repo's
+  Actions secrets with it.
 - **Terraform** ≥ 1.6.
 - **Docker** (with `buildx`), for the batch Lambda's container image.
 - **uv** (Python package manager — `pip install uv`).
@@ -80,125 +81,37 @@ Everything below is a **one-time** setup. After it's done, pushes to `main` that
 touch `terraform/`, `docker/`, `src/`, `scripts/`, `pyproject.toml`, or `uv.lock`
 redeploy automatically via GitHub Actions.
 
-### 1. Find your AWS account ID
+### 1. Bootstrap the account
+
+Requires `jyjulianwong/Infrastructure-GitHub`'s bootstrap to have run in the same
+account first — it owns the account-wide GitHub Actions OIDC provider. Then, with
+admin credentials for the target account:
 
 ```bash
-ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
-echo $ACCOUNT_ID
+scripts/bootstrap.sh
 ```
 
-### 2. Bootstrap Terraform state infrastructure
+It shows the plan and asks before applying anything, and is safe to re-run. It:
 
-```bash
-cd terraform/bootstrap
-terraform init
-terraform apply -var="aws_account_id=$ACCOUNT_ID"
-# Creates: 
-# - ${ACCOUNT_ID}-jyjulianwong-mrd-terraform-state (S3)
-# - jyjulianwong-mrd-terraform-lock (DynamoDB)
-cd ../..
-```
+1. applies `terraform/bootstrap` — the Terraform state bucket
+   (`<ACCOUNT_ID>-jyjulianwong-mrd-terraform-state`), lock table
+   (`jyjulianwong-mrd-terraform-lock`), and the IAM role CI assumes through
+   GitHub's OIDC provider (trusted for this repo's `main` branch and pull requests
+   only — there are no static AWS keys);
+2. moves the bootstrap's own state into the state bucket, so later runs work from
+   any clean clone;
+3. sets the `AWS_ACCOUNT_ID` and `AWS_ROLE_ARN` Actions secrets, prompts for
+   `FRED_API_KEY`, `ALPHA_VANTAGE_API_KEY` and `GH_ADMIN_TOKEN` if the repo doesn't
+   have them yet, and deletes any leftover `AWS_ACCESS_KEY_ID` /
+   `AWS_SECRET_ACCESS_KEY` secrets.
 
-### 3. First-time Terraform apply
+The CI role's permissions live in `terraform/bootstrap`, not the main stack, so CI
+can never widen its own access — change them by re-running the script.
 
-The batch Lambda is a container image — AWS validates that the image actually
-exists in ECR *at function-creation time*, so (same as
-`Investment-News-Analysis-AI`, which hits the exact same constraint) the very
-first apply has to happen in two steps: create the ECR repository on its own,
-push an initial image into it, then apply everything else. Every apply *after*
-this one is a single `terraform apply` — `lifecycle { ignore_changes =
-[image_uri] }` on the Lambda resource only protects against Terraform *reverting*
-the image CI/CD pushes later; it doesn't help this first bootstrap.
+### 2. Optionally set Actions variables
 
-**Phase 1 — create the ECR repository only:**
-
-```bash
-cd terraform
-terraform init \
-  -backend-config="bucket=${ACCOUNT_ID}-jyjulianwong-mrd-terraform-state" \
-  -backend-config="dynamodb_table=jyjulianwong-mrd-terraform-lock"
-
-terraform apply \
-  -target=aws_ecr_repository.batch_lambda \
-  -var="aws_account_id=$ACCOUNT_ID" \
-  -var="fred_api_key=$MRD_FRED_API_KEY" \
-  -var="alpha_vantage_api_key=$MRD_ALPHA_VANTAGE_API_KEY"
-```
-
-**Phase 2 — build and push an initial batch Lambda image:**
-
-```bash
-ECR_URL=$(terraform output -raw ecr_repository_url)
-
-aws ecr get-login-password --region eu-west-2 | \
-  docker login --username AWS --password-stdin "$ECR_URL"
-
-docker buildx build \
-  --platform linux/amd64 \
-  --provenance=false \
-  --push \
-  -f ../docker/batch-lambda.Dockerfile \
-  -t "$ECR_URL:latest" \
-  ..
-```
-
-**Phase 3 — complete the full apply:**
-
-```bash
-terraform apply \
-  -var="aws_account_id=$ACCOUNT_ID" \
-  -var="fred_api_key=$MRD_FRED_API_KEY" \
-  -var="alpha_vantage_api_key=$MRD_ALPHA_VANTAGE_API_KEY"
-```
-
-This creates everything else: the S3 app bucket, the DynamoDB model registry, the
-SSM parameters, both IAM roles, the batch Lambda (now pointing at the real image
-you just pushed), the Server Lambda (a dependency-less placeholder zip — see step 4),
-its public Function URL, the two EventBridge Rules (`ingest` daily, `predict`
-daily) + shared DLQ, and the CloudWatch alarm + SNS topic.
-
-Optional variables (all have sensible defaults — see `terraform/variables.tf`):
-`cors_allowed_origins`, `staleness_max_age_hours`, `batch_predict_schedule_expression`,
-`batch_ingest_schedule_expression`, `alert_email`.
-
-### 4. Deploy the real Server Lambda code (manually, for the first time only)
-
-Terraform's own zip for the Server Lambda has no dependencies bundled — just enough
-for `terraform apply` to succeed. Build and push the real one once, before CI/CD
-exists to do it for you:
-
-```bash
-cd ..   # repo root
-./scripts/package_lambda.sh
-aws lambda update-function-code \
-  --function-name "$(terraform -chdir=terraform output -raw server_lambda_function_name)" \
-  --zip-file fileb://build/lambda.zip \
-  --region eu-west-2
-```
-
-### 5. Retrieve generated IAM credentials
-
-```bash
-cd terraform
-terraform output github_actions_access_key_id
-terraform output -raw github_actions_secret_access_key && echo
-```
-
-### 6. Add GitHub Actions secrets and variables
-
-In your GitHub repository → **Settings → Secrets and variables → Actions**:
-
-**Secrets:**
-
-| Secret name | Value |
-|---|---|
-| `AWS_ACCOUNT_ID` | Your 12-digit AWS account ID |
-| `AWS_ACCESS_KEY_ID` | From step 5 |
-| `AWS_SECRET_ACCESS_KEY` | From step 5 |
-| `FRED_API_KEY` | Your FRED/ALFRED API key |
-| `ALPHA_VANTAGE_API_KEY` | Your Alpha Vantage API key |
-
-**Variables** (optional — all have defaults in the workflow if omitted):
+In your GitHub repository → **Settings → Secrets and variables → Actions →
+Variables** (all have defaults in the workflow if omitted):
 
 | Variable name | Value |
 |---|---|
@@ -210,13 +123,21 @@ In your GitHub repository → **Settings → Secrets and variables → Actions**
 
 These are what the workflow reads on every run — see [CI/CD](#cicd) below.
 
-### 7. Confirm the SNS email subscription
+### 3. Deploy
+
+Push to `main` (or re-run the latest `Deploy Infrastructure & Lambda` workflow).
+CI builds everything from an empty account in one run: it creates the ECR
+repository on its own first (AWS requires a container Lambda's image to exist
+when the function is created), pushes the batch Lambda image, applies the whole
+main stack, then deploys the real code to both Lambdas.
+
+### 4. Confirm the SNS email subscription
 
 AWS emails `alert_email` (default `julianwong2000@gmail.com`) a subscription
 confirmation link the first time `terraform apply` creates the SNS topic — click
 it, or alarm notifications will never arrive.
 
-### 8. Train and publish a first model, then promote it to production
+### 5. Train and publish a first model, then promote it to production
 
 Everything above deploys infrastructure with **no model in the registry yet** —
 the batch Lambda and the API will both correctly 404/log "no production model"
@@ -252,7 +173,7 @@ reason:
 `promote_model.py` also best-effort async-invokes the batch Lambda so a first
 prediction exists immediately rather than waiting for the next 06:00 UTC run.
 
-### 9. Test it
+### 6. Test it
 
 ```bash
 curl "$(terraform -chdir=terraform output -raw server_function_url)v1/health"
@@ -268,9 +189,13 @@ curl "$(terraform -chdir=terraform output -raw server_function_url)v1/models/all
   `src/**`, `pyproject.toml`, or `uv.lock`): runs `terraform plan` and posts the
   output as a PR comment.
 - **On merge to `main`**: bumps a calendar version and tags it (`version_bump`),
-  then — checked out at that tag — runs `terraform apply`, builds and pushes the
-  batch Lambda image to ECR, calls `update-function-code` for it, packages the
-  real Server Lambda zip, and calls `update-function-code` for that too (`deploy`).
+  then — checked out at that tag — ensures the ECR repository exists, builds and
+  pushes the batch Lambda image to it, runs `terraform apply`, calls
+  `update-function-code` for the batch Lambda, packages the real Server Lambda
+  zip, and calls `update-function-code` for that too (`deploy`).
+
+Both jobs authenticate to AWS by assuming `AWS_ROLE_ARN` through GitHub's OIDC
+provider (`id-token: write`) — no AWS access keys are stored anywhere.
 
 No `ruff`/`mypy`/`pytest`/`terraform validate` gate runs in GitHub Actions —
 those are enforced locally via `.pre-commit-config.yaml` (see below); CI only

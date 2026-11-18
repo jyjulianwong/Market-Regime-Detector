@@ -42,14 +42,3 @@ output "alerts_topic_arn" {
   description = "SNS topic ARN alert_email is subscribed to"
   value       = aws_sns_topic.alerts.arn
 }
-
-output "github_actions_access_key_id" {
-  description = "AWS access key ID for GitHub Actions — store as GitHub secret AWS_ACCESS_KEY_ID"
-  value       = aws_iam_access_key.github_actions.id
-}
-
-output "github_actions_secret_access_key" {
-  description = "AWS secret access key for GitHub Actions — store as GitHub secret AWS_SECRET_ACCESS_KEY"
-  value       = aws_iam_access_key.github_actions.secret
-  sensitive   = true
-}

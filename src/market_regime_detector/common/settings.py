@@ -1,3 +1,5 @@
+import boto3
+from pydantic import model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -14,9 +16,12 @@ class Settings(BaseSettings):
 
     aws_region: str = "eu-west-2"
     # Match terraform/main.tf's actual deployed names (local.global_prefix /
-    # local.scoped_prefix) — these defaults are placeholders for local dev only;
-    # Terraform always sets the real values as Lambda env vars.
-    s3_bucket_name: str = "004246189700-jyjulianwong-mrd"
+    # local.scoped_prefix) — these defaults are for local dev only; Terraform
+    # always sets the real values as Lambda env vars. Left empty, the bucket name
+    # is derived from the AWS account the active credentials belong to (see
+    # _default_s3_bucket_name), so local scripts follow whichever account you're
+    # logged in to.
+    s3_bucket_name: str = ""
     dynamodb_table_name: str = "jyjulianwong-mrd-models"
     log_level: str = "INFO"
 
@@ -38,6 +43,14 @@ class Settings(BaseSettings):
     # at request time — distinct from the batch job's own generation-time
     # `is_stale` (brief section 3.3); the server ORs the two together.
     staleness_max_age_hours: float = 36.0
+
+    @model_validator(mode="after")
+    def _default_s3_bucket_name(self) -> "Settings":
+        if not self.s3_bucket_name:
+            sts = boto3.client("sts", region_name=self.aws_region)
+            account_id = sts.get_caller_identity()["Account"]
+            self.s3_bucket_name = f"{account_id}-jyjulianwong-mrd"
+        return self
 
 
 def get_settings() -> Settings:

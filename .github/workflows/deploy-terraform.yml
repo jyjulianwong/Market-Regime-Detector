@@ -34,6 +34,7 @@ jobs:
     permissions:
       contents: read
       pull-requests: write
+      id-token: write # OIDC: assume AWS_ROLE_ARN
 
     steps:
       - uses: actions/checkout@v4
@@ -41,9 +42,8 @@ jobs:
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          aws-access-key-id:     ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region:            ${{ env.AWS_REGION }}
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region:     ${{ env.AWS_REGION }}
 
       - name: Set up Terraform
         uses: hashicorp/setup-terraform@v3
@@ -135,6 +135,18 @@ jobs:
     needs: [version_bump]
     runs-on: ubuntu-latest
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    permissions:
+      contents: read
+      id-token: write # OIDC: assume AWS_ROLE_ARN
+    env:
+      TF_VAR_aws_account_id:                    ${{ secrets.AWS_ACCOUNT_ID }}
+      TF_VAR_fred_api_key:                      ${{ secrets.FRED_API_KEY }}
+      TF_VAR_alpha_vantage_api_key:             ${{ secrets.ALPHA_VANTAGE_API_KEY }}
+      TF_VAR_cors_allowed_origins:              ${{ vars.CORS_ALLOWED_ORIGINS || '' }}
+      TF_VAR_staleness_max_age_hours:           ${{ vars.STALENESS_MAX_AGE_HOURS || '36' }}
+      TF_VAR_alert_email:                       ${{ vars.ALERT_EMAIL || 'julianwong2000@gmail.com' }}
+      TF_VAR_batch_predict_schedule_expression: ${{ vars.BATCH_PREDICT_SCHEDULE_EXPRESSION || 'cron(0 6 ? * MON-FRI *)' }}
+      TF_VAR_batch_ingest_schedule_expression:  ${{ vars.BATCH_INGEST_SCHEDULE_EXPRESSION || 'cron(0 4 ? * MON-FRI *)' }}
 
     steps:
       - uses: actions/checkout@v4
@@ -144,13 +156,8 @@ jobs:
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          aws-access-key-id:     ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region:            ${{ env.AWS_REGION }}
-
-      # -----------------------------------------------------------------------
-      # Terraform apply
-      # -----------------------------------------------------------------------
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region:     ${{ env.AWS_REGION }}
 
       - name: Set up Terraform
         uses: hashicorp/setup-terraform@v3
@@ -168,39 +175,29 @@ jobs:
             -backend-config="bucket=$TF_BACKEND_BUCKET" \
             -backend-config="dynamodb_table=$TF_BACKEND_TABLE"
 
-      - name: Terraform Apply
+      # -----------------------------------------------------------------------
+      # Build & push the batch Lambda container image — BEFORE the full apply.
+      # AWS validates that a container Lambda's image exists in ECR at
+      # function-creation time, so in a fresh account the ECR repository and an
+      # image must exist before Terraform can create aws_lambda_function.batch.
+      # The targeted apply is a no-op once the repository exists.
+      # -----------------------------------------------------------------------
+
+      - name: Ensure ECR repository exists
         working-directory: terraform
         run: |
           terraform apply \
-            -var="aws_account_id=${{ secrets.AWS_ACCOUNT_ID }}" \
-            -var="fred_api_key=${{ secrets.FRED_API_KEY }}" \
-            -var="alpha_vantage_api_key=${{ secrets.ALPHA_VANTAGE_API_KEY }}" \
-            -var="cors_allowed_origins=${{ vars.CORS_ALLOWED_ORIGINS || '' }}" \
-            -var="staleness_max_age_hours=${{ vars.STALENESS_MAX_AGE_HOURS || '36' }}" \
-            -var="alert_email=${{ vars.ALERT_EMAIL || 'julianwong2000@gmail.com' }}" \
-            -var="batch_predict_schedule_expression=${{ vars.BATCH_PREDICT_SCHEDULE_EXPRESSION || 'cron(0 6 ? * MON-FRI *)' }}" \
-            -var="batch_ingest_schedule_expression=${{ vars.BATCH_INGEST_SCHEDULE_EXPRESSION || 'cron(0 4 ? * MON-FRI *)' }}" \
+            -target=aws_ecr_repository.batch_lambda \
             -auto-approve \
             -no-color
 
-      - name: Read Terraform outputs
-        id: tf_outputs
-        working-directory: terraform
-        run: |
-          echo "ecr_url=$(terraform output -raw ecr_repository_url)" >> "$GITHUB_OUTPUT"
-          echo "batch_lambda_name=$(terraform output -raw batch_lambda_function_name)" >> "$GITHUB_OUTPUT"
-          echo "server_lambda_name=$(terraform output -raw server_lambda_function_name)" >> "$GITHUB_OUTPUT"
-
-      # -----------------------------------------------------------------------
-      # Build & push the batch Lambda container image
-      # -----------------------------------------------------------------------
-
       - name: Log in to Amazon ECR
+        id: ecr_login
         uses: aws-actions/amazon-ecr-login@v2
 
       - name: Build, tag, and push batch Lambda image
         env:
-          ECR_URL:   ${{ steps.tf_outputs.outputs.ecr_url }}
+          ECR_URL:   ${{ steps.ecr_login.outputs.registry }}/jyjulianwong-mrd-batch-lambda
           IMAGE_TAG: ${{ github.sha }}
         run: |
           docker buildx build \
@@ -212,6 +209,25 @@ jobs:
             -t "$ECR_URL:latest" \
             .
 
+      # -----------------------------------------------------------------------
+      # Terraform apply
+      # -----------------------------------------------------------------------
+
+      - name: Terraform Apply
+        working-directory: terraform
+        run: |
+          terraform apply \
+            -auto-approve \
+            -no-color
+
+      - name: Read Terraform outputs
+        id: tf_outputs
+        working-directory: terraform
+        run: |
+          echo "ecr_url=$(terraform output -raw ecr_repository_url)" >> "$GITHUB_OUTPUT"
+          echo "batch_lambda_name=$(terraform output -raw batch_lambda_function_name)" >> "$GITHUB_OUTPUT"
+          echo "server_lambda_name=$(terraform output -raw server_lambda_function_name)" >> "$GITHUB_OUTPUT"
+
       - name: Update batch Lambda function code
         env:
           ECR_URL:         ${{ steps.tf_outputs.outputs.ecr_url }}
@@ -222,7 +238,6 @@ jobs:
             --function-name "$BATCH_LAMBDA" \
             --image-uri "$ECR_URL:$IMAGE_TAG" \
             --region "$AWS_REGION"
-
       # -----------------------------------------------------------------------
       # Build & deploy the real server Lambda zip (with dependencies)
       # -----------------------------------------------------------------------
