@@ -190,12 +190,13 @@ jobs:
             -backend-config="dynamodb_table=$TF_BACKEND_TABLE"
 
       # -----------------------------------------------------------------------
-      # Build & push the batch Lambda container image — BEFORE the full apply.
-      # AWS validates that a container Lambda's image exists in ECR at
-      # function-creation time, so in a fresh account the ECR repository and an
-      # image must exist before Terraform can create aws_lambda_function.batch.
-      # The targeted apply is a no-op once the repository exists.
+      # Build & push the batch Lambda container image
       # -----------------------------------------------------------------------
+      # Runs BEFORE the full apply: AWS validates that a container Lambda's
+      # image exists in ECR at function-creation time, so in a fresh account the
+      # ECR repository and an image must exist before Terraform can create
+      # aws_lambda_function.batch. The targeted apply is a no-op once the
+      # repository exists.
 
       - name: Ensure ECR repository exists
         working-directory: terraform

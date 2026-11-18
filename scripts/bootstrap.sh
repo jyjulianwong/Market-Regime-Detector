@@ -13,7 +13,9 @@
 # Usage: scripts/bootstrap.sh
 set -euo pipefail
 
-# --- Repo-specific settings ----------------------------------------------------
+# ------------------------------------------------------------------------------
+# Repo-specific settings
+# ------------------------------------------------------------------------------
 GITHUB_REPOSITORY="jyjulianwong/Market-Regime-Detector"
 PROJECT="jyjulianwong-mrd" # terraform/bootstrap's var.project default
 # The account-wide GitHub Actions OIDC provider is owned by
@@ -22,9 +24,9 @@ OWNS_OIDC_PROVIDER=false
 # Secrets the deploy workflow needs besides AWS_ACCOUNT_ID / AWS_ROLE_ARN. You're
 # prompted for any the repo doesn't have yet; export one to overwrite it.
 EXTRA_SECRETS=(FRED_API_KEY ALPHA_VANTAGE_API_KEY GH_ADMIN_TOKEN)
-NEXT_STEPS="Next: merge this repo's OIDC migration PR. Its first deploy creates the ECR
-repository, pushes the batch Lambda image and applies the whole main stack."
-# --------------------------------------------------------------------------------
+NEXT_STEPS="Next: trigger your GitHub Actions CI/CD workflow to deploy the rest of the
+infrastructure. Its first run creates the ECR repository, pushes the batch Lambda
+image and applies the whole main stack."
 
 REGION="eu-west-2" # must match terraform/backend.tf and the workflows' AWS_REGION
 OIDC_PROVIDER_HOST="token.actions.githubusercontent.com"
@@ -70,7 +72,9 @@ retire_local_state() {
   return 0
 }
 
-# --- 1. Preflight -------------------------------------------------------------------
+# ------------------------------------------------------------------------------
+# 1. Preflight
+# ------------------------------------------------------------------------------
 step "Preflight"
 for cmd in aws terraform gh jq; do
   command -v "$cmd" >/dev/null || die "$cmd is not installed"
@@ -105,7 +109,9 @@ if [[ -f $LOCAL_STATE ]]; then
   fi
 fi
 
-# --- 2. Terraform init: S3 backend if it exists yet, local state otherwise ----------
+# ------------------------------------------------------------------------------
+# 2. Terraform init: S3 backend if it exists yet, local state otherwise
+# ------------------------------------------------------------------------------
 step "Initialising terraform/bootstrap"
 if aws s3api head-bucket --bucket "$STATE_BUCKET" >/dev/null 2>&1 \
   && aws dynamodb describe-table --region "$REGION" --table-name "$LOCK_TABLE" >/dev/null 2>&1; then
@@ -123,7 +129,9 @@ else
   tf init -input=false -reconfigure
 fi
 
-# --- 3. Plan and apply -----------------------------------------------------------------
+# ------------------------------------------------------------------------------
+# 3. Plan and apply
+# ------------------------------------------------------------------------------
 step "Planning terraform/bootstrap"
 TF_VARS=(
   -var "aws_account_id=$ACCOUNT_ID"
@@ -152,7 +160,9 @@ fi
 
 ROLE_ARN="$(tf output -raw github_actions_role_arn)"
 
-# --- 4. GitHub Actions secrets -----------------------------------------------------------
+# ------------------------------------------------------------------------------
+# 4. GitHub Actions secrets
+# ------------------------------------------------------------------------------
 step "Setting GitHub Actions secrets on $GITHUB_REPOSITORY"
 set_secret() { printf '%s' "$2" | gh secret set "$1" --repo "$GITHUB_REPOSITORY"; }
 
@@ -185,15 +195,21 @@ for name in AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY; do
   fi
 done
 
-# --- Repo-specific extra steps (optional repo_post_bootstrap in the settings) --------------
+# ------------------------------------------------------------------------------
+# Repo-specific extra steps (optional repo_post_bootstrap in the settings)
+# ------------------------------------------------------------------------------
 if declare -F repo_post_bootstrap >/dev/null; then
   repo_post_bootstrap
 fi
 
-# --- Done ------------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
+# Done
+# ------------------------------------------------------------------------------
 step "Bootstrapped $GITHUB_REPOSITORY into AWS account $ACCOUNT_ID"
 echo "  State bucket: s3://$STATE_BUCKET"
 echo "  Lock table:   $LOCK_TABLE"
 echo "  CI role:      $ROLE_ARN"
-echo
-echo "$NEXT_STEPS"
+if [[ -n ${NEXT_STEPS:-} ]]; then
+  echo
+  echo "$NEXT_STEPS"
+fi

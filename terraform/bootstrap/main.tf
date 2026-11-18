@@ -92,15 +92,16 @@ resource "aws_dynamodb_table" "tf_lock" {
 }
 
 # ---------------------------------------------------------------------------
-# IAM — GitHub Actions role (OIDC): Terraform apply of the main stack plus the
-# deploy steps in .github/workflows/deploy-terraform.yml.
+# IAM — GitHub Actions role (OIDC)
+# ---------------------------------------------------------------------------
+# Used for Terraform apply of the main stack plus the deploy steps in
+# .github/workflows/deploy-terraform.yml.
 #
 # Lives here, not in the main stack, so CI can never rewrite its own trust
 # policy or permissions — only a local bootstrap apply can. That's also why
 # the policy names main-stack resources by ARN pattern rather than by
 # reference. The OIDC provider itself is an account-wide singleton owned by
 # jyjulianwong/Infrastructure-GitHub's bootstrap.
-# ---------------------------------------------------------------------------
 
 data "aws_iam_openid_connect_provider" "github" {
   url = "https://token.actions.githubusercontent.com"
@@ -240,11 +241,11 @@ resource "aws_iam_role_policy" "github_actions" {
   policy = data.aws_iam_policy_document.github_actions.json
 }
 
-output "state_bucket_name" {
+output "iac_tf_state_bucket_name" {
   value = aws_s3_bucket.tf_state.bucket
 }
 
-output "lock_table_name" {
+output "iac_tf_lock_table_name" {
   value = aws_dynamodb_table.tf_lock.name
 }
 
