@@ -12,8 +12,21 @@ permissions:
   contents: write
 
 jobs:
+  scan-vulnerabilities:
+    name: Scan Vulnerabilities
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Scan for secrets
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
   deploy:
     name: Publish to gh-pages
+    needs: scan-vulnerabilities
     runs-on: ubuntu-latest
 
     steps:
