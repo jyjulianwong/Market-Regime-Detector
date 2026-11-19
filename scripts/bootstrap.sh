@@ -84,12 +84,24 @@ IDENTITY="$(aws sts get-caller-identity --output json)" \
 ACCOUNT_ID="$(jq -r .Account <<<"$IDENTITY")"
 gh auth status >/dev/null 2>&1 || die "gh is not authenticated — run \`gh auth login\` first"
 
+# The CI role's trust policy must match the exact `sub` claim GitHub puts in this
+# repo's OIDC tokens. Repos on GitHub's immutable subjects use
+# repo:<owner>@<owner id>/<repo>@<repo id>, others repo:<owner>/<repo>; a custom
+# claim template is something else again, which the trust policy doesn't handle.
+SUBJECT_SETTINGS="$(gh api "repos/$GITHUB_REPOSITORY/actions/oidc/customization/sub")" \
+  || die "couldn't read $GITHUB_REPOSITORY's OIDC subject settings from GitHub"
+[[ "$(jq -r .use_default <<<"$SUBJECT_SETTINGS")" == true ]] \
+  || die "$GITHUB_REPOSITORY uses a custom OIDC subject claim template; terraform/bootstrap's trust policy expects GitHub's default (<prefix>:ref:refs/heads/main, <prefix>:pull_request)"
+SUBJECT_PREFIX="$(jq -r '.sub_claim_prefix // empty' <<<"$SUBJECT_SETTINGS")"
+SUBJECT_PREFIX="${SUBJECT_PREFIX:-repo:$GITHUB_REPOSITORY}"
+
 STATE_BUCKET="$ACCOUNT_ID-$PROJECT-terraform-state"
 LOCK_TABLE="$PROJECT-terraform-lock"
 
 echo "  GitHub repository: $GITHUB_REPOSITORY"
 echo "  AWS account:       $ACCOUNT_ID ($(jq -r .Arn <<<"$IDENTITY"))"
 echo "  AWS region:        $REGION"
+echo "  OIDC subject:      $SUBJECT_PREFIX:…"
 confirm "Bootstrap $GITHUB_REPOSITORY into AWS account $ACCOUNT_ID?"
 
 if [[ $OWNS_OIDC_PROVIDER != true ]]; then
@@ -136,7 +148,7 @@ step "Planning terraform/bootstrap"
 TF_VARS=(
   -var "aws_account_id=$ACCOUNT_ID"
   -var "aws_region=$REGION"
-  -var "github_repository=$GITHUB_REPOSITORY"
+  -var "github_oidc_subject_prefix=$SUBJECT_PREFIX"
 )
 plan_rc=0
 tf plan -input=false -detailed-exitcode "${TF_VARS[@]}" -out="$WORK_DIR/bootstrap.tfplan" || plan_rc=$?

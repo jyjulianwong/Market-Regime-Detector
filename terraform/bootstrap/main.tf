@@ -22,10 +22,9 @@ variable "aws_account_id" {
   type        = string
 }
 
-variable "github_repository" {
-  description = "owner/name of the GitHub repository whose Actions workflows may assume the CI role"
+variable "github_oidc_subject_prefix" {
+  description = "How this repository's GitHub Actions OIDC tokens begin their `sub` claim: repo:<owner>@<owner id>/<repo>@<repo id> with GitHub's immutable subjects, repo:<owner>/<repo> without. scripts/bootstrap.sh reads it from GitHub's API."
   type        = string
-  default     = "jyjulianwong/Market-Regime-Detector"
 }
 
 variable "project" {
@@ -128,8 +127,8 @@ data "aws_iam_policy_document" "github_actions_trust" {
       test     = "StringEquals"
       variable = "token.actions.githubusercontent.com:sub"
       values = [
-        "repo:${var.github_repository}:ref:refs/heads/main",
-        "repo:${var.github_repository}:pull_request",
+        "${var.github_oidc_subject_prefix}:ref:refs/heads/main",
+        "${var.github_oidc_subject_prefix}:pull_request",
       ]
     }
   }
