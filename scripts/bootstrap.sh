@@ -170,7 +170,7 @@ set_secret AWS_ACCOUNT_ID "$ACCOUNT_ID"
 set_secret AWS_ROLE_ARN "$ROLE_ARN"
 echo "  Set AWS_ACCOUNT_ID and AWS_ROLE_ARN"
 
-EXISTING_SECRETS="$(gh secret list --repo "$GITHUB_REPOSITORY" --limit 200 --json name --jq '.[].name')"
+EXISTING_SECRETS="$(gh secret list --repo "$GITHUB_REPOSITORY" --json name --jq '.[].name')"
 # ${arr[@]+...} keeps empty arrays safe under `set -u` on macOS's bash 3.2.
 for name in ${EXTRA_SECRETS[@]+"${EXTRA_SECRETS[@]}"}; do
   if [[ -n ${!name:-} ]]; then
