@@ -221,6 +221,14 @@ step "Bootstrapped $GITHUB_REPOSITORY into AWS account $ACCOUNT_ID"
 echo "  State bucket: s3://$STATE_BUCKET"
 echo "  Lock table:   $LOCK_TABLE"
 echo "  CI role:      $ROLE_ARN"
+echo
+# terraform/ (the main stack) keeps its own backend settings in .terraform/;
+# a checkout that last ran against another account still points there.
+echo "To use terraform/ (the main stack) from this checkout, e.g. for terraform output,"
+echo "point it at this account's state first:"
+echo "  terraform -chdir=terraform init -reconfigure \\"
+echo "    -backend-config=\"bucket=$STATE_BUCKET\" \\"
+echo "    -backend-config=\"dynamodb_table=$LOCK_TABLE\""
 if [[ -n ${NEXT_STEPS:-} ]]; then
   echo
   echo "$NEXT_STEPS"
