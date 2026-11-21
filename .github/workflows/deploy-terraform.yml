@@ -27,8 +27,8 @@ env:
   TF_VERSION: "1.9.0"
 
 jobs:
-  scan-vulnerabilities:
-    name: Scan Vulnerabilities
+  security-scan:
+    name: Security scan
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -41,7 +41,7 @@ jobs:
 
   terraform-plan:
     name: Terraform Plan
-    needs: scan-vulnerabilities
+    needs: security-scan
     runs-on: ubuntu-latest
     if: github.event_name == 'pull_request'
     permissions:
@@ -112,9 +112,9 @@ jobs:
               body,
             });
 
-  version_bump:
-    name: Calendar Version Bump
-    needs: scan-vulnerabilities
+  version-bump:
+    name: Calendar version bump
+    needs: security-scan
     runs-on: ubuntu-latest
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     permissions:
@@ -145,8 +145,8 @@ jobs:
         run: git push origin HEAD:main --tags
 
   deploy:
-    name: Terraform Apply + Lambda Deploy
-    needs: [version_bump]
+    name: Terraform Apply + Deploy Lambda
+    needs: [version-bump]
     runs-on: ubuntu-latest
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     permissions:
@@ -165,7 +165,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ needs.version_bump.outputs.tag }}
+          ref: ${{ needs.version-bump.outputs.tag }}
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
@@ -207,12 +207,12 @@ jobs:
             -no-color
 
       - name: Log in to Amazon ECR
-        id: ecr_login
+        id: ecr-login
         uses: aws-actions/amazon-ecr-login@v2
 
       - name: Build, tag, and push batch Lambda image
         env:
-          ECR_URL:   ${{ steps.ecr_login.outputs.registry }}/jyjulianwong-mrd-batch-lambda
+          ECR_URL:   ${{ steps.ecr-login.outputs.registry }}/jyjulianwong-mrd-batch-lambda
           IMAGE_TAG: ${{ github.sha }}
         run: |
           docker buildx build \
@@ -236,7 +236,7 @@ jobs:
             -no-color
 
       - name: Read Terraform outputs
-        id: tf_outputs
+        id: tf-outputs
         working-directory: terraform
         run: |
           echo "ecr_url=$(terraform output -raw ecr_repository_url)" >> "$GITHUB_OUTPUT"
@@ -245,8 +245,8 @@ jobs:
 
       - name: Update batch Lambda function code
         env:
-          ECR_URL:         ${{ steps.tf_outputs.outputs.ecr_url }}
-          BATCH_LAMBDA:    ${{ steps.tf_outputs.outputs.batch_lambda_name }}
+          ECR_URL:         ${{ steps.tf-outputs.outputs.ecr_url }}
+          BATCH_LAMBDA:    ${{ steps.tf-outputs.outputs.batch_lambda_name }}
           IMAGE_TAG:       ${{ github.sha }}
         run: |
           aws lambda update-function-code \
@@ -270,7 +270,7 @@ jobs:
 
       - name: Update server Lambda function code
         env:
-          SERVER_LAMBDA: ${{ steps.tf_outputs.outputs.server_lambda_name }}
+          SERVER_LAMBDA: ${{ steps.tf-outputs.outputs.server_lambda_name }}
         run: |
           aws lambda update-function-code \
             --function-name "$SERVER_LAMBDA" \

@@ -12,8 +12,8 @@ permissions:
   contents: write
 
 jobs:
-  scan-vulnerabilities:
-    name: Scan Vulnerabilities
+  security-scan:
+    name: Security scan
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -26,7 +26,7 @@ jobs:
 
   deploy:
     name: Publish to gh-pages
-    needs: scan-vulnerabilities
+    needs: security-scan
     runs-on: ubuntu-latest
 
     steps:
