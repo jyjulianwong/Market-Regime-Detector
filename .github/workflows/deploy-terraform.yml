@@ -145,7 +145,7 @@ jobs:
         run: git push origin HEAD:main --tags
 
   deploy:
-    name: Terraform Apply + Lambda deploy
+    name: Terraform Apply + Deploy Lambda
     needs: [version-bump]
     runs-on: ubuntu-latest
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
